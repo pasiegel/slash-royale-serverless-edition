@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Slash Royale - Twitch Chat Mini-Game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fs-xs: 10px;
+    --fs-sm: 12px;
+    --fs-md: 14px;
+    --fs-lg: 18px;
+    --fs-xl: 26px;
+  }
+
+  /* ================= BASE / TRANSPARENT STAGE (4:3, 640x480) ================= */
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0);
+    font-family: 'Press Start 2P', monospace;
+    color: #e8e8e8;
+    overflow: hidden;
+  }
+
+  #stage {
+    position: relative;
+    width: 640px;
+    height: 480px;
+    margin: 0;
+  }
+
+  /* ================= 35mm GRINDHOUSE FILM OVERLAY ================= */
+  #grindhouseOverlay {
+    position: absolute; inset: 0; z-index: 2; pointer-events: none;
+    box-shadow: inset 0 0 70px 22px rgba(0,0,0,0.85);
+  }
+  #filmGrain {
+    position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0.5; mix-blend-mode: overlay;
+    background-image: repeating-radial-gradient(circle at 20% 30%, rgba(255,255,255,0.05) 0, transparent 1.5px),
+                      repeating-radial-gradient(circle at 65% 70%, rgba(255,255,255,0.04) 0, transparent 1.5px);
+    background-size: 5px 5px, 4px 4px;
+    animation: grainShift 0.4s steps(4) infinite;
+  }
+  @keyframes grainShift {
+    0%   { background-position: 0 0, 0 0; }
+    25%  { background-position: 2px 1px, -1px 2px; }
+    50%  { background-position: -1px 2px, 1px -1px; }
+    75%  { background-position: 1px -2px, 2px 1px; }
+    100% { background-position: 0 0, 0 0; }
+  }
+  #cigBurn {
+    position: absolute; top: 8%; right: 10%; width: 26px; height: 26px; border-radius: 50%;
+    z-index: 2; pointer-events: none;
+    background: radial-gradient(circle, rgba(255,220,180,0.9) 0%, rgba(120,60,20,0.6) 55%, transparent 75%);
+    opacity: 0; animation: burnFlicker 13s infinite;
+  }
+  @keyframes burnFlicker { 0%, 96%, 100% { opacity: 0; } 97%, 99% { opacity: 0.85; } }
+
+  #hallOfFame, #statsCard,
+  #panelLobby > h1, #lobbyTimer, #lobbyJoinHint, #lobbyList, #captionTape, #captionTapeBottom,
+  #huntHeader, #huntRecap, #killerIntro, #evidenceScene, #finalRecapView, #allTimeView,
+  #splashLogo, #splashCta, #pollOverlay {
+    position: relative;
+    z-index: 3;
+  }
+
+  .panel {
+    display: none; width: 100%; height: 100%; box-sizing: border-box; padding: 14px 18px;
+    background: linear-gradient(180deg, #150404 0%, #060202 100%);
+    border: 4px solid #6b0000; border-radius: 6px; box-shadow: 0 0 0 2px #1a0000 inset;
+    overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: #b30000 transparent;
+  }
+  .panel.active { display: block; }
+  .panel::-webkit-scrollbar { width: 6px; }
+  .panel::-webkit-scrollbar-thumb { background: #b30000; border-radius: 3px; }
+  .panel::-webkit-scrollbar-track { background: transparent; }
+
+  h1, h2, h3 { margin: 0 0 8px 0; text-shadow: 2px 2px 0 #000; }
+  h1 { font-size: var(--fs-lg); color: #ff2b2b; }
+  h2 { font-size: var(--fs-md); color: #ffd0d0; }
+  .small { font-size: var(--fs-xs); line-height: 1.6; }
+
+  /* ================= IDLE SPLASH / HALL OF FAME ================= */
+  #idlePrompt { position: relative; height: 100%; box-sizing: border-box; padding: 18px 14px; border-radius: 10px; text-align: center; overflow: hidden; }
+  #splashLogo { margin: 10px 0 4px; }
+  .logo-word { display: block; font-size: 40px; line-height: 1.25; letter-spacing: 2px; -webkit-text-stroke: 2px #000; text-shadow: 4px 4px 0 rgba(0,0,0,0.6); animation: logoShake 2.4s ease-in-out infinite; }
+  .logo-slash { background: linear-gradient(180deg, #ff8080 0%, #ff1a1a 45%, #8a0000 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .logo-royale { background: linear-gradient(180deg, #d8d8d8 0%, #8a8a8a 45%, #3a3a3a 100%); -webkit-background-clip: text; background-clip: text; color: transparent; animation-delay: 0.2s; }
+  @keyframes logoShake { 0%, 92%, 100% { transform: translate(0,0) rotate(0deg); } 93% { transform: translate(-2px, 1px) rotate(-1deg); } 95% { transform: translate(2px, -1px) rotate(1deg); } 97% { transform: translate(-1px, 0) rotate(0deg); } }
+  .drip { position: absolute; top: 44px; width: 6px; border-radius: 0 0 6px 6px; background: linear-gradient(180deg, #b30000 0%, #6e0000 100%); animation: dripGrow 2.6s ease-in-out infinite; }
+  .drip:nth-child(1) { left: 22%; height: 10px; animation-delay: 0s; }
+  .drip:nth-child(2) { left: 48%; height: 16px; animation-delay: 0.6s; }
+  .drip:nth-child(3) { left: 72%; height: 8px; animation-delay: 1.1s; }
+  @keyframes dripGrow { 0%, 100% { transform: scaleY(1); opacity: 0.9; } 50% { transform: scaleY(1.4); opacity: 1; } }
+
+  #splashScene { position: relative; height: 110px; margin: 20px auto 16px; max-width: 520px; border: 3px solid #000; border-radius: 6px; overflow: hidden; background: linear-gradient(180deg, #0c1410 0%, #060a08 70%, #030503 100%); }
+  .tree { position: absolute; bottom: 0; width: 0; height: 0; border-left: 14px solid transparent; border-right: 14px solid transparent; border-bottom: 60px solid #0a1a0e; opacity: 0.85; }
+  .tree:nth-child(1) { left: 8%; border-bottom-width: 70px; }
+  .tree:nth-child(2) { left: 28%; border-bottom-width: 50px; }
+  .tree:nth-child(3) { left: 70%; border-bottom-width: 64px; }
+  .tree:nth-child(4) { left: 86%; border-bottom-width: 46px; }
+  #splashKiller { position: absolute; bottom: 4px; left: 50%; width: 12px; height: 22px; background: #1a1a1a; border-radius: 2px 2px 0 0; box-shadow: 0 0 4px 1px rgba(255,0,0,0.35); animation: killerPace 5s ease-in-out infinite; }
+  @keyframes killerPace { 0%, 100% { transform: translateX(-160%); } 50% { transform: translateX(60%); } }
+  #splashCta { margin-top: 4px; font-size: var(--fs-lg); color: #ff2b2b; text-shadow: 2px 2px 0 #000, 0 0 12px rgba(255,20,20,0.7); animation: pulse 1.3s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.05); } }
+
+  #statsCard { display: none; text-align: center; }
+  #statsCardName { font-size: var(--fs-xl); color: #ff2b2b; }
+  #statsCardBody { margin: 14px 0 0; }
+  #statsCardBody .stat-row { display: flex; justify-content: space-between; padding: 10px 12px; font-size: var(--fs-lg); border-bottom: 1px dashed #5c0000; }
+
+  #leaderboardList, #resultsLeaderboardList { list-style: none; margin: 6px 0 0; padding: 0; font-size: var(--fs-sm); }
+  #leaderboardList li, #resultsLeaderboardList li { display: flex; justify-content: space-between; padding: 4px 6px; border-bottom: 1px dashed #5c0000; }
+  #leaderboardList li:nth-child(1), #resultsLeaderboardList li:nth-child(1) { color: #ff2b2b; }
+
+  /* ================= LOBBY ================= */
+  .caution-tape { height: 12px; margin: 6px 0; background: repeating-linear-gradient(45deg, #000 0 10px, #ffcc00 10px 20px); background-size: 28px 28px; animation: tapeScroll 1s linear infinite; border-radius: 2px; }
+  @keyframes tapeScroll { from { background-position: 0 0; } to { background-position: 28px 0; } }
+  #lobbyTimer { font-size: var(--fs-xl); color: #ff2b2b; text-align: center; text-shadow: 2px 2px 0 #000, 0 0 14px rgba(255,20,20,0.7); animation: lobbyTimerPulse 1s ease-in-out infinite; }
+  @keyframes lobbyTimerPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+  #lobbyJoinHint { text-align: center; font-size: var(--fs-sm); color: #ffd0d0; margin: 2px 0 10px; animation: pulse 1.6s ease-in-out infinite; }
+  #lobbyList { list-style: none; margin: 6px 0 0; padding: 0; font-size: var(--fs-sm); }
+  #lobbyList li { padding: 2px 0; }
+  @keyframes vhsGlitch { 0% { transform: translateX(-6px); text-shadow: -2px 0 #ff2b4d, 2px 0 #00e5ff; opacity: 0.6; } 30% { transform: translateX(4px); text-shadow: 2px 0 #ff2b4d, -2px 0 #00e5ff; opacity: 0.9; } 60% { transform: translateX(-2px); text-shadow: 1px 0 #ff2b4d, -1px 0 #00e5ff; opacity: 1; } 100% { transform: translateX(0); text-shadow: none; opacity: 1; } }
+  #lobbyList li.glitch-in { animation: vhsGlitch 0.4s ease-out; }
+  #toast { position: absolute; bottom: 8px; left: 18px; right: 18px; z-index: 3; font-size: var(--fs-sm); color: #1a0000; background: #ffcc00; padding: 4px 8px; border-radius: 3px; display: none; }
+  #toast.show { display: block; animation: fadeOut 3s forwards; }
+  @keyframes fadeOut { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+
+  /* ================= AUDIENCE POLL UI ================= */
+  #pollOverlay {
+    display: none; position: absolute; top: 18px; right: 24px; width: 170px;
+    background: rgba(8, 3, 3, 0.95); border: 3px solid #6b0000; border-radius: 6px;
+    padding: 10px; z-index: 10; font-size: var(--fs-xs);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.8), inset 0 0 0 2px #1a0000;
+  }
+  #pollOverlay.show { display: block; animation: slideInRight 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+  @keyframes slideInRight { from { transform: translateX(250px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  
+  #pollHeader { color: #ff2b2b; text-align: center; margin-bottom: 8px; line-height: 1.4; text-shadow: 1px 1px 0 #000; }
+  #pollTimer { text-align: center; font-size: var(--fs-md); color: #ffcc00; margin-bottom: 6px; text-shadow: 1px 1px 0 #000; }
+  #pollHint { text-align: center; color: #ffd0d0; margin-bottom: 10px; }
+  #pollHint .highlight { color: #fff; }
+  #pollResultsList { list-style: none; margin: 0; padding: 0; }
+  #pollResultsList li { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed #5c0000; }
+  #pollResultsList li .name { color: #e8e8e8; overflow: hidden; text-overflow: ellipsis; max-width: 120px; white-space: nowrap; }
+  #pollResultsList li .count { color: #ff2b2b; }
+
+  /* ================= HUNT ================= */
+  #huntHeader { text-align: center; margin-bottom: 4px; }
+  #huntHeader h1 { margin-bottom: 2px; }
+  #turnInfo { font-size: var(--fs-sm); color: #ffd0d0; text-align: center; min-height: 14px; }
+
+  #huntFloor { position: relative; width: 100%; height: 340px; margin-top: 8px; border: 3px solid #000; border-radius: 4px; overflow: hidden; background: #333; }
+
+  /* Room Themes */
+  #huntFloor.theme-cabin { background: url('img/cabin-backdrop.png') center/cover no-repeat, linear-gradient(180deg, #3a2414 0%, #2d1a0d 100%); }
+  #huntFloor.theme-woods { background: url('img/woods-backdrop.png') center/cover no-repeat, linear-gradient(180deg, #16294a 0%, #1f4a34 55%, #0a1a0e 100%); }
+  #huntFloor.theme-meatlocker { background: url('img/meatlocker-backdrop.png') center/cover no-repeat, linear-gradient(180deg, #2e4a5c 0%, #192c3a 100%); }
+  #huntFloor.theme-cemetery { background: url('img/cemetery-backdrop.png') center/cover no-repeat, linear-gradient(180deg, #1a1e24 0%, #0d1218 100%); }
+  #huntFloor.theme-gasstation { background: url('img/gasstation-backdrop.png') center/cover no-repeat, linear-gradient(180deg, #1f221c 0%, #0d120a 100%); }
+  #huntFloor.theme-barn { background: url('img/barn-backdrop.png') center/cover no-repeat, linear-gradient(180deg, #2b1d14 0%, #170d08 100%); }
+  #huntFloor.theme-sawmill { background: url('img/sawmill-backdrop.png') center/cover no-repeat, linear-gradient(180deg, #332a22 0%, #1a140f 100%); }
+  
+  #huntFloor.theme-mine { background: linear-gradient(180deg, #2a2e33 0%, #1c2024 100%); }
+  #huntFloor.theme-livingroom { background: linear-gradient(180deg, #46323f 0%, #382836 100%); }
+  #huntFloor.theme-basement { background: linear-gradient(180deg, #262a2c 0%, #16191a 100%); }
+  #huntFloor.theme-attic { background: linear-gradient(180deg, #3a3226 0%, #241f16 100%); }
+  #huntFloor.theme-boathouse { background: linear-gradient(180deg, #1c2e34 0%, #0f1c20 100%); }
+  #huntFloor.theme-chase { background: linear-gradient(90deg, #241414 0%, #150a0a 60%, #0a0505 100%); }
+
+  [data-room] { display: none; }
+  #huntFloor.theme-cabin [data-room="cabin"], 
+  #huntFloor.theme-mine [data-room="mine"], 
+  #huntFloor.theme-livingroom [data-room="livingroom"], 
+  #huntFloor.theme-basement [data-room="basement"], 
+  #huntFloor.theme-attic [data-room="attic"], 
+  #huntFloor.theme-boathouse [data-room="boathouse"], 
+  #huntFloor.theme-woods [data-room="woods"], 
+  #huntFloor.theme-cemetery [data-room="cemetery"], 
+  #huntFloor.theme-meatlocker [data-room="meatlocker"],
+  #huntFloor.theme-gasstation [data-room="gasstation"],
+  #huntFloor.theme-barn [data-room="barn"],
+  #huntFloor.theme-sawmill [data-room="sawmill"] { display: block; }
+
+  .prop { position: absolute; }
+  .prop-wardrobe, .prop-bunkbed, .prop-crates, .prop-minecart, .prop-boulder, .prop-mine-crate, 
+  .prop-sofa, .prop-bookshelf, .prop-tv-console, .prop-furnace, .prop-boxes-stack, 
+  .prop-trunk, .prop-mannequin, .prop-canoe, .prop-barrel, .prop-fallen-log, .prop-bushes, 
+  .prop-meat-hook, .prop-tombstone, .prop-gas-pump, .prop-tire-stack, .prop-hay-bale, 
+  .prop-tractor-wheel, .prop-buzzsaw, .prop-log-pile { z-index: 6; }
+  
+  .prop-wardrobe { width: 48px; height: 92px; left: 4%; top: 6%; background: #4a2e18; border: 3px solid #1f1006; border-radius: 3px; }
+  .prop-bunkbed  { width: 96px; height: 46px; right: 4%; top: 8%; background: #3a230f; border: 3px solid #1f1006; border-radius: 3px; }
+  .prop-bunkbed::after { content: ""; position: absolute; top: 20px; left: 0; right: 0; height: 3px; background: #1f1006; }
+  .prop-crates { width: 58px; height: 48px; left: 30%; bottom: 8%; background: #5c4326; border: 3px solid #241a0d; border-radius: 2px; }
+  .prop-crates::after { content: ""; position: absolute; inset: 6px; border: 2px solid #3a2b17; }
+  .prop-minecart { width: 70px; height: 34px; left: 5%; bottom: 6%; background: #4a3826; border: 3px solid #201509; border-radius: 4px 4px 0 0; }
+  .prop-minecart::before, .prop-minecart::after { content: ""; position: absolute; bottom: -8px; width: 12px; height: 12px; border-radius: 50%; background: #111; }
+  .prop-minecart::before { left: 8px; } .prop-minecart::after { right: 8px; }
+  .prop-beam { width: 16px; height: 90%; right: 6%; top: 5%; background: repeating-linear-gradient(180deg, #4a3826 0 12px, #3a2c1c 12px 24px); border-radius: 2px; }
+  .prop-boulder { width: 64px; height: 40px; left: 34%; bottom: 10%; background: #4a4e52; border: 3px solid #202325; border-radius: 45% 55% 40% 50%; }
+  .prop-mine-crate { width: 56px; height: 42px; right: 26%; bottom: 8%; background: #5c4326; border: 3px solid #241a0d; border-radius: 2px; }
+  .prop-mine-crate::after { content: ""; position: absolute; inset: 5px; border: 2px solid #3a2b17; }
+  .prop-sofa { width: 120px; height: 44px; left: 6%; bottom: 6%; background: #6b2e4a; border: 3px solid #2e0f1f; border-radius: 8px; }
+  .prop-curtain { width: 34px; height: 100%; right: 4%; top: 0; background: linear-gradient(180deg, #4a2b52 0%, #331c39 100%); border-left: 3px solid #1f0f24; }
+  .prop-bookshelf { width: 56px; height: 100px; left: 34%; top: 6%; background: #3a2a20; border: 3px solid #1a0f0a; border-radius: 2px; }
+  .prop-bookshelf::after { content: ""; position: absolute; inset: 6px 6px auto 6px; height: 6px; background: repeating-linear-gradient(90deg, #a83232 0 6px, #d4a017 6px 12px, #2e6b4a 12px 18px); box-shadow: 0 22px 0 0 currentColor, 0 44px 0 0 currentColor, 0 66px 0 0 currentColor; color: transparent; }
+  .prop-tv-console { width: 90px; height: 30px; right: 20%; bottom: 8%; background: #2e2016; border: 3px solid #120a06; border-radius: 3px; }
+  .prop-tv-console::after { content: ""; position: absolute; top: -22px; left: 50%; transform: translateX(-50%); width: 40px; height: 24px; background: #111; border: 3px solid #000; box-shadow: 0 0 8px 1px rgba(80,140,255,0.5); }
+  .prop-furnace { width: 60px; height: 70px; left: 6%; top: 8%; background: #3a3d40; border: 3px solid #17181a; border-radius: 4px; }
+  .prop-furnace::after { content: ""; position: absolute; top: 14px; left: 50%; transform: translateX(-50%); width: 22px; height: 22px; border-radius: 50%; background: #6b2e0e; box-shadow: 0 0 8px 2px rgba(255,120,20,0.5); }
+  .prop-boxes-stack { width: 64px; height: 50px; right: 6%; bottom: 8%; background: #7a6035; border: 3px solid #3a2c17; border-radius: 2px; }
+  .prop-boxes-stack::after { content: ""; position: absolute; top: 50%; left: 0; right: 0; height: 3px; background: #3a2c17; }
+  .prop-trunk { width: 70px; height: 40px; left: 34%; bottom: 10%; background: #4a3826; border: 3px solid #201509; border-radius: 6px; }
+  .prop-trunk::after { content: ""; position: absolute; top: -4px; left: 8px; right: 8px; height: 4px; background: #201509; border-radius: 3px; }
+  .prop-mannequin { width: 20px; height: 100px; right: 30%; top: 10%; background: linear-gradient(180deg, #d8c8a8 0%, #b8a888 100%); border-radius: 10px 10px 4px 4px; border: 3px solid #6b5c3e; }
+  .prop-canoe { width: 130px; height: 26px; left: 10%; bottom: 8%; background: #6b4423; border: 3px solid #3f280f; border-radius: 50% 50% 20% 20% / 100% 100% 40% 40%; }
+  .prop-barrel { width: 46px; height: 46px; right: 12%; bottom: 10%; background: #5c4326; border: 3px solid #241a0d; border-radius: 8px; }
+  .prop-barrel::after { content: ""; position: absolute; top: 50%; left: 0; right: 0; height: 4px; transform: translateY(-50%); background: #241a0d; }
+  .prop-moon { width: 50px; height: 50px; top: 6%; right: 12%; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fffef0 0%, #e8e4c8 60%, #cfc9a0 100%); box-shadow: 0 0 24px 8px rgba(255,255,220,0.35); }
+  .prop-tree { position: absolute; bottom: 14%; width: 0; height: 0; border-left: 14px solid transparent; border-right: 14px solid transparent; border-bottom: 60px solid #030805; filter: drop-shadow(0 0 3px rgba(0,0,0,0.6)); }
+  .prop-tree-1 { left: 6%; border-bottom-width: 72px; }
+  .prop-tree-2 { left: 24%; border-bottom-width: 52px; }
+  .prop-tree-3 { left: 68%; border-bottom-width: 64px; }
+  .prop-tree-4 { left: 86%; border-bottom-width: 48px; }
+  .prop-fallen-log { width: 110px; height: 24px; left: 10%; bottom: 10%; background: #4a3320; border: 3px solid #241a0d; border-radius: 14px; }
+  .prop-fallen-log::after { content: ""; position: absolute; top: 3px; left: 6px; right: 6px; height: 3px; background: #241a0d; border-radius: 2px; }
+  .prop-bushes { width: 70px; height: 44px; right: 10%; bottom: 8%; background: #1f4a28; border: 3px solid #0f2614; border-radius: 50% 50% 40% 40%; }
+  .prop-exit-door { width: 30px; height: 70px; right: 3%; top: 50%; transform: translateY(-50%); background: #2a1a10; border: 3px solid #120a06; border-radius: 2px; }
+  .prop-exit-door::after { content: ""; position: absolute; top: 50%; right: 5px; width: 5px; height: 5px; border-radius: 50%; background: #d4a017; }
+  .prop-meat-hook { width: 30px; height: 70px; top: 0; background: linear-gradient(90deg, #666 0%, #ccc 50%, #666 100%); width: 4px; border-radius: 2px; }
+  .prop-meat-hook::after { content: ""; position: absolute; bottom: -12px; left: -10px; width: 20px; height: 20px; border: 4px solid #ccc; border-top-color: transparent; border-right-color: transparent; border-radius: 50%; transform: rotate(-45deg); }
+  .prop-tombstone { width: 44px; height: 60px; background: #4a4e52; border: 3px solid #202325; border-radius: 22px 22px 0 0; }
+  .prop-tombstone::after { content: "RIP"; position: absolute; top: 12px; left: 0; width: 100%; text-align: center; font-size: 8px; color: #202325; }
+  
+  /* New Theme Props */
+  .prop-gas-pump { width: 36px; height: 80px; background: #6b2e2e; border: 3px solid #2b1111; border-radius: 4px 4px 0 0; }
+  .prop-gas-pump::after { content: ""; position: absolute; top: 10px; left: 6px; right: 6px; height: 24px; background: #111; border: 2px solid #000; }
+  .prop-tire-stack { width: 44px; height: 50px; background: #222; border: 3px solid #000; border-radius: 6px; }
+  .prop-tire-stack::after { content: ""; position: absolute; top: 15px; left: 0; right: 0; height: 4px; background: #111; box-shadow: 0 16px 0 #111; }
+  
+  .prop-hay-bale { width: 60px; height: 40px; background: #b89c49; border: 3px solid #5c4b1e; border-radius: 4px; }
+  .prop-hay-bale::after { content: ""; position: absolute; top: 50%; left: 0; right: 0; height: 2px; background: #5c4b1e; box-shadow: 0 -10px 0 #5c4b1e, 0 10px 0 #5c4b1e; }
+  .prop-tractor-wheel { width: 60px; height: 60px; background: #222; border: 4px solid #111; border-radius: 50%; }
+  .prop-tractor-wheel::after { content: ""; position: absolute; top: 15px; left: 15px; width: 22px; height: 22px; background: #cc3333; border-radius: 50%; }
+  
+  .prop-buzzsaw { width: 70px; height: 30px; background: #4a4e52; border: 3px solid #202325; border-radius: 4px; }
+  .prop-buzzsaw::after { content: ""; position: absolute; top: -20px; left: 20px; width: 30px; height: 30px; background: repeating-conic-gradient(#aaa 0 15deg, #777 15deg 30deg); border-radius: 50%; }
+  .prop-log-pile { width: 80px; height: 40px; background: #5c4326; border: 3px solid #241a0d; border-radius: 10px; }
+  .prop-log-pile::after { content: ""; position: absolute; top: 15px; left: -2px; right: -2px; height: 3px; background: #241a0d; box-shadow: 0 -10px 0 #241a0d; }
+
+  .camper-sprite { position: absolute; width: 20px; height: 30px; transform: translate(-50%, -50%); z-index: 5; }
+  .camper-sprite .head { position: absolute; top: 0; left: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--hair-color, #5a3a22); box-shadow: 0 0 0 2px #000; }
+  .camper-sprite .head::after { content: ""; position: absolute; top: 3px; left: 1px; width: 8px; height: 6px; border-radius: 50%; background: #e8b48c; }
+  .camper-sprite .body { position: absolute; top: 9px; left: 2px; width: 16px; height: 20px; border-radius: 3px; background: var(--shirt-color, #446688); box-shadow: 0 0 0 2px #000; }
+  .camper-sprite .label { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); font-size: 7px; color: #fff; text-shadow: 1px 1px 0 #000; white-space: nowrap; }
+  .camper-sprite.alive { animation: scaredTremble 0.5s ease-in-out infinite; }
+  .camper-sprite.caught { animation: camperFall 0.5s ease-in forwards; }
+  .camper-sprite.fleeing { animation: fleeBounce 0.22s ease-in-out infinite; }
+  @keyframes scaredTremble { 0%, 100% { transform: translate(-50%, -50%) rotate(0deg); } 25% { transform: translate(calc(-50% - 1px), -50%) rotate(-2deg); } 75% { transform: translate(calc(-50% + 1px), -50%) rotate(2deg); } }
+  @keyframes fleeBounce { 0%, 100% { margin-top: 0; } 50% { margin-top: -4px; } }
+  @keyframes camperFall { 0% { transform: translate(-50%, -50%) rotate(0deg); opacity: 1; } 100% { transform: translate(-50%, -50%) rotate(85deg) translateY(6px); opacity: 0; } }
+
+  #killerSprite { position: absolute; width: 26px; height: 36px; transform: translate(-50%, -50%); z-index: 8; opacity: 0; }
+  #killerSprite.stalking { animation: killerStalk 0.55s ease-in-out infinite; }
+  @keyframes killerStalk { 0%, 100% { margin-top: 0; } 50% { margin-top: -3px; } }
+  #killerSprite .mask { position: absolute; top: 0; left: 5px; width: 16px; height: 14px; border-radius: 50%; background: #d8d0c0; box-shadow: 0 0 0 2px #000; }
+  #killerSprite .mask::before, #killerSprite .mask::after { content: ""; position: absolute; top: 6px; width: 2px; height: 2px; border-radius: 50%; background: #000; }
+  #killerSprite .mask::before { left: 4px; } #killerSprite .mask::after { left: 10px; }
+  #killerSprite .jacket { position: absolute; top: 12px; left: 2px; width: 22px; height: 24px; border-radius: 3px; background: #5a5f2e; box-shadow: 0 0 0 2px #000; }
+  #killerSprite .machete { position: absolute; top: 14px; left: 21px; width: 22px; height: 4px; background: linear-gradient(90deg, #ccc 0%, #ccc 65%, #b30000 100%); transform: rotate(35deg); border-radius: 2px; box-shadow: 0 0 0 1px #000; }
+
+  #slashFx { position: absolute; width: 50px; height: 50px; transform: translate(-50%, -50%) rotate(-30deg) scale(0); z-index: 9; opacity: 0; pointer-events: none; background: linear-gradient(90deg, transparent 40%, rgba(255,255,255,0.95) 48%, rgba(255,255,255,0.95) 52%, transparent 60%); }
+  #slashFx.show { animation: slashSwipe 0.35s ease-out forwards; }
+  @keyframes slashSwipe { 0% { opacity: 0; transform: translate(-50%, -50%) rotate(-30deg) scale(0.3); } 40% { opacity: 1; transform: translate(-50%, -50%) rotate(-30deg) scale(1.3); } 100% { opacity: 0; transform: translate(-50%, -50%) rotate(-30deg) scale(1.6); } }
+  #bloodSplat { position: absolute; width: 40px; height: 40px; transform: translate(-50%, -50%) scale(0); z-index: 6; opacity: 0; }
+  #bloodSplat.show { animation: splatPop 1.4s ease-out forwards; }
+  #bloodSplat::before, #bloodSplat::after { content: ""; position: absolute; border-radius: 50%; background: #b30000; }
+  #bloodSplat::before { width: 28px; height: 28px; top: 6px; left: 6px; }
+  #bloodSplat::after  { width: 14px; height: 14px; top: -4px; left: 20px; }
+  @keyframes splatPop { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.2); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); } 35% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+
+  #countdownOverlay { display: none; position: absolute; inset: 0; z-index: 7; background: rgba(0,0,0,0.6); flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 16px; box-sizing: border-box; }
+  #countdownOverlay.show { display: flex; }
+  #countdownQuote { font-size: var(--fs-sm); color: #ffd0d0; font-style: italic; margin-bottom: 18px; max-width: 480px; text-shadow: 2px 2px 0 #000; }
+  #countdownNumber { font-size: 64px; color: #ff2b2b; text-shadow: 0 0 20px rgba(255,20,20,0.8), 3px 3px 0 #000; animation: countdownPulse 0.7s ease-in-out; }
+  @keyframes countdownPulse { 0% { transform: scale(1.6); opacity: 0; } 30% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+
+  #eventBanner { position: absolute; left: 5%; right: 5%; top: 40%; transform: translateY(-50%); text-align: center; font-size: var(--fs-md); color: #ff2b2b; text-shadow: 2px 2px 0 #000; z-index: 10; opacity: 0; pointer-events: none; }
+  #eventBanner.show { animation: bannerPop 1.4s ease-out 1; }
+  #eventBanner.success { color: #7fffb0; }
+  #eventBanner.fail { color: #ff5050; text-shadow: 0 0 6px #ff5050, 0 0 14px #6e0000; }
+  @keyframes bannerPop { 0% { opacity: 0; transform: translateY(-50%) scale(0.85); } 15% { opacity: 1; transform: translateY(-50%) scale(1.08); } 25% { opacity: 1; transform: translateY(-50%) scale(1); } 85% { opacity: 1; } 100% { opacity: 0; } }
+
+  #killerIntro { display: none; width: 100%; height: 340px; margin-top: 8px; border: 3px solid #000; border-radius: 4px; background: radial-gradient(circle at 50% 30%, #1a0505 0%, #050101 75%); box-sizing: border-box; padding: 20px; text-align: center; overflow: hidden; }
+  #killerIntro.show { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #killerIntroLabel { font-size: var(--fs-sm); color: #ffd0d0; letter-spacing: 3px; margin-bottom: 10px; opacity: 0.85; }
+  #killerIntroName { font-size: 24px; line-height: 1.4; -webkit-text-stroke: 1.5px #000; text-shadow: 3px 3px 0 rgba(0,0,0,0.6); background: linear-gradient(180deg, #ff8080 0%, #ff1a1a 45%, #8a0000 100%); -webkit-background-clip: text; background-clip: text; color: transparent; animation: logoShake 2.4s ease-in-out infinite; margin-bottom: 18px; }
+  #killerIntroBackstory { font-size: var(--fs-sm); color: #d8c8c8; font-style: italic; line-height: 1.8; max-width: 460px; }
+
+  #huntRecap { display: none; width: 100%; height: 340px; margin-top: 8px; border: 3px solid #000; border-radius: 4px; background: #0e0505; box-sizing: border-box; padding: 10px; overflow-y: auto; }
+  #huntRecap.show { display: block; }
+  #huntRecapTitle { text-align: center; margin-bottom: 6px; }
+  #huntRecapColumns { display: flex; gap: 14px; }
+  .recap-col { flex: 1; min-width: 0; }
+  .recap-col h3 { text-align: center; font-size: var(--fs-sm); margin: 0 0 4px; }
+  .recap-col.escaped h3 { color: #7fffb0; }
+  .recap-col.caught h3 { color: #ff8a6b; }
+  .recap-col ul { list-style: none; margin: 0; padding: 0; font-size: var(--fs-sm); }
+  .recap-col li { text-align: center; padding: 3px 4px; border-bottom: 1px dashed #5c0000; }
+  .recap-col.escaped li { color: #d8ffe6; }
+  .recap-col.caught li { color: #ffd0c4; }
+
+  /* ================= EVIDENCE BOARD ================= */
+  #evidenceScene { position: relative; width: 100%; height: 380px; margin-top: 6px; display: flex; align-items: center; justify-content: center; gap: 18px; background: radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px) 0 0 / 10px 10px, #6b4a2c; border: 3px solid #3a2612; border-radius: 4px; }
+  .evidence-card { position: relative; width: 270px; max-width: 44%; background: #efe6d0; border: 2px solid #b8ab88; padding: 16px 16px 18px; box-sizing: border-box; text-align: center; box-shadow: 4px 6px 0 rgba(0,0,0,0.4); opacity: 0; transform: translateY(16px) rotate(-2deg); }
+  .evidence-card.show { animation: cardRise 0.6s ease-out forwards; }
+  .evidence-card:nth-child(2) { transform: translateY(16px) rotate(2deg); }
+  .evidence-card:nth-child(2).show { animation: cardRiseRight 0.6s ease-out forwards; }
+  @keyframes cardRise { from { opacity: 0; transform: translateY(16px) rotate(-2deg); } to { opacity: 1; transform: translateY(0) rotate(-1.5deg); } }
+  @keyframes cardRiseRight { from { opacity: 0; transform: translateY(16px) rotate(2deg); } to { opacity: 1; transform: translateY(0) rotate(1.5deg); } }
+  .evidence-card::before { content: ""; position: absolute; top: -8px; left: 50%; transform: translateX(-50%); width: 14px; height: 14px; border-radius: 50%; background: #b30000; box-shadow: 0 0 0 2px #6e0000; }
+  .evidence-stamp { position: absolute; top: 10px; right: 4px; font-size: 9px; color: #b30000; border: 2px solid #b30000; padding: 2px 5px; transform: rotate(12deg); opacity: 0.85; }
+  .evidence-rip { font-size: 9px; color: #6b5c3e; margin-bottom: 8px; letter-spacing: 1px; padding-right: 46px; }
+  .evidence-name { font-size: var(--fs-md); color: #2b2418; margin-bottom: 8px; word-break: break-word; }
+  .evidence-cause { font-size: 9px; color: #6b5c3e; margin-bottom: 12px; font-style: italic; }
+  .evidence-epitaph { font-size: var(--fs-xs); color: #3a3020; line-height: 1.6; }
+
+  /* ================= FINAL RESULTS ================= */
+  #finalRecapView, #allTimeView { display: none; }
+  #finalRecapView.showing, #allTimeView.showing { display: block; }
+  #finalRecapList { list-style: none; margin: 6px 0 0; padding: 0; font-size: var(--fs-sm); }
+  #finalRecapList li { display: flex; justify-content: space-between; padding: 4px 6px; border-bottom: 1px dashed #5c0000; }
+  #finalRecapList li.winner-row { color: #7fffb0; text-shadow: 0 0 6px #7fffb0, 0 0 14px #1a7a4a; }
+  #finalRecapList li.killer-row { color: #ff2b2b; text-shadow: 0 0 6px #ff2b2b, 0 0 14px #6e0000; }
+
+  /* ================= DEV / SIMULATOR PANEL ================= */
+  #devPanel { display: none; position: fixed; top: 0; left: 660px; width: 340px; height: 480px; background: #101010; color: #ffd0d0; font-family: monospace; font-size: var(--fs-md); padding: 10px; box-sizing: border-box; border: 1px solid #444; overflow-y: auto; }
+  #devPanel.show { display: block; }
+  #devPanel h3 { color: #ff2b2b; font-size: var(--fs-md); }
+  #devPanel label { display: block; margin: 6px 0 2px; }
+  #devPanel input[type=text] { width: 100%; box-sizing: border-box; padding: 3px; font-family: monospace; }
+  #devPanel button { margin: 4px 4px 4px 0; padding: 4px 8px; cursor: pointer; }
+  #devToggleBtn { position: fixed; top: 4px; left: 4px; z-index: 999; font-size: 9px; opacity: 0.35; background: #000; color: #fff; border: 1px solid #555; padding: 2px 5px; cursor: pointer; }
+  #devToggleBtn:hover { opacity: 1; }
+  #devLog { margin-top: 8px; max-height: 80px; overflow-y: auto; font-size: var(--fs-sm); color: #ff9a9a; }
+</style>
+</head>
+<body>
+
+  <button id="devToggleBtn" title="Toggle dev/simulator mode (persists via localStorage)">dev</button>
+
+  <div id="stage">
+    <div id="grindhouseOverlay"></div>
+    <div id="filmGrain"></div>
+    <div id="cigBurn"></div>
+
+    <!-- AUDIENCE POLL UI -->
+    <div id="pollOverlay">
+      <div id="pollHeader">WHO EXPIRES NEXT?</div>
+      <div id="pollTimer">10</div>
+      <div id="pollHint">Type <span class="highlight">!vote [name]</span></div>
+      <ul id="pollResultsList"></ul>
+    </div>
+
+    <div id="panelIdle" class="panel active">
+      <div id="idlePrompt">
+        <div id="splashLogo">
+          <span class="logo-word logo-slash">SLASH</span>
+          <span class="logo-word logo-royale">ROYALE</span>
+          <div class="drip"></div><div class="drip"></div><div class="drip"></div>
+        </div>
+        <div id="splashScene">
+          <div class="tree"></div><div class="tree"></div><div class="tree"></div><div class="tree"></div>
+          <div id="splashKiller"></div>
+        </div>
+        <div id="splashCta">Type !join to survive the night!</div>
+      </div>
+      <div id="hallOfFame" style="display:none;">
+        <h2>All-Time Survivors</h2>
+        <ul id="leaderboardList"></ul>
+      </div>
+      <div id="statsCard">
+        <h2 id="statsCardName">Player Stats</h2>
+        <div id="statsCardBody"></div>
+      </div>
+    </div>
+
+    <div id="panelLobby" class="panel">
+      <h1>SLASH ROYALE - LOBBY OPEN</h1>
+      <div class="caution-tape"></div>
+      <div id="lobbyTimer">60</div>
+      <div id="lobbyJoinHint">Type !join to jump in!</div>
+      <ul id="lobbyList"></ul>
+      <div class="caution-tape"></div>
+      <div id="toast"></div>
+    </div>
+
+    <div id="panelHunt" class="panel">
+      <div id="huntHeader">
+        <h1 id="roomTitle">ROOM</h1>
+        <div id="turnInfo">&nbsp;</div>
+      </div>
+      <div id="huntFloor" class="theme-cabin">
+        <!-- Original Rooms -->
+        <div class="prop prop-wardrobe" data-room="cabin"></div>
+        <div class="prop prop-bunkbed" data-room="cabin"></div>
+        <div class="prop prop-crates" data-room="cabin"></div>
+        
+        <div class="prop prop-minecart" data-room="mine"></div>
+        <div class="prop prop-beam" data-room="mine"></div>
+        <div class="prop prop-boulder" data-room="mine"></div>
+        <div class="prop prop-mine-crate" data-room="mine"></div>
+        
+        <div class="prop prop-sofa" data-room="livingroom"></div>
+        <div class="prop prop-curtain" data-room="livingroom"></div>
+        <div class="prop prop-bookshelf" data-room="livingroom"></div>
+        <div class="prop prop-tv-console" data-room="livingroom"></div>
+        
+        <div class="prop prop-furnace" data-room="basement"></div>
+        <div class="prop prop-boxes-stack" data-room="basement"></div>
+        
+        <div class="prop prop-trunk" data-room="attic"></div>
+        <div class="prop prop-mannequin" data-room="attic"></div>
+        
+        <div class="prop prop-canoe" data-room="boathouse"></div>
+        <div class="prop prop-barrel" data-room="boathouse"></div>
+        
+        <div class="prop prop-moon" data-room="woods"></div>
+        <div class="prop prop-tree prop-tree-1" data-room="woods"></div>
+        <div class="prop prop-tree prop-tree-2" data-room="woods"></div>
+        <div class="prop prop-tree prop-tree-3" data-room="woods"></div>
+        <div class="prop prop-tree prop-tree-4" data-room="woods"></div>
+        <div class="prop prop-fallen-log" data-room="woods"></div>
+        <div class="prop prop-bushes" data-room="woods"></div>
+
+        <div class="prop prop-tombstone" style="left: 20%; top: 25%;" data-room="cemetery"></div>
+        <div class="prop prop-tombstone" style="left: 70%; top: 15%;" data-room="cemetery"></div>
+        <div class="prop prop-tombstone" style="left: 45%; top: 75%;" data-room="cemetery"></div>
+        
+        <div class="prop prop-meat-hook" style="left: 25%;" data-room="meatlocker"></div>
+        <div class="prop prop-meat-hook" style="left: 70%;" data-room="meatlocker"></div>
+
+        <!-- New Rooms -->
+        <div class="prop prop-gas-pump" style="left: 20%; top: 15%;" data-room="gasstation"></div>
+        <div class="prop prop-gas-pump" style="left: 70%; top: 15%;" data-room="gasstation"></div>
+        <div class="prop prop-tire-stack" style="left: 45%; top: 75%;" data-room="gasstation"></div>
+        
+        <div class="prop prop-hay-bale" style="left: 25%; top: 25%;" data-room="barn"></div>
+        <div class="prop prop-hay-bale" style="left: 70%; top: 70%;" data-room="barn"></div>
+        <div class="prop prop-tractor-wheel" style="left: 55%; top: 20%;" data-room="barn"></div>
+        
+        <div class="prop prop-buzzsaw" style="left: 45%; top: 40%;" data-room="sawmill"></div>
+        <div class="prop prop-log-pile" style="left: 15%; top: 75%;" data-room="sawmill"></div>
+        <div class="prop prop-log-pile" style="left: 75%; top: 25%;" data-room="sawmill"></div>
+
+        <div id="exitDoor" class="prop prop-exit-door" style="display:none;"></div>
+
+        <div id="camperLayer"></div>
+        <div id="countdownOverlay">
+          <div id="countdownQuote"></div>
+          <div id="countdownNumber">3</div>
+        </div>
+        <div id="killerSprite">
+          <div class="mask"></div>
+          <div class="jacket"></div>
+          <div class="machete"></div>
+        </div>
+        <div id="slashFx"></div>
+        <div id="bloodSplat"></div>
+        <div id="eventBanner"></div>
+      </div>
+
+      <div id="killerIntro">
+        <div id="killerIntroLabel">TONIGHT'S KILLER</div>
+        <div id="killerIntroName">Name</div>
+        <div id="killerIntroBackstory">Backstory</div>
+      </div>
+      <div id="huntRecap">
+        <h2 id="huntRecapTitle">ROOM COMPLETE</h2>
+        <div id="huntRecapColumns">
+          <div class="recap-col escaped">
+            <h3>Escaped</h3>
+            <ul id="huntRecapEscaped"></ul>
+          </div>
+          <div class="recap-col caught">
+            <h3>Expired</h3>
+            <ul id="huntRecapCaught"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="panelMemoriam" class="panel">
+      <h1>CASE FILES</h1>
+      <div id="evidenceScene">
+        <div class="evidence-card" id="evidenceCard1">
+          <div class="evidence-stamp">EXPIRED</div>
+          <div class="evidence-rip">MISSING PERSON</div>
+          <div class="evidence-name">Name</div>
+          <div class="evidence-cause">Expired in the Cabin</div>
+          <div class="evidence-epitaph">"Epitaph"</div>
+        </div>
+        <div class="evidence-card" id="evidenceCard2">
+          <div class="evidence-stamp">EXPIRED</div>
+          <div class="evidence-rip">MISSING PERSON</div>
+          <div class="evidence-name">Name</div>
+          <div class="evidence-cause">Expired in the Cabin</div>
+          <div class="evidence-epitaph">"Epitaph"</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="panelResults" class="panel">
+      <div id="finalRecapView">
+        <h1 id="finalTitle">RESULTS</h1>
+        <ul id="finalRecapList"></ul>
+      </div>
+      <div id="allTimeView">
+        <h2>All-Time Survivors</h2>
+        <ul id="resultsLeaderboardList"></ul>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="devPanel">
+    <h3>SLASH ROYALE DEV CONSOLE</h3>
+    <div class="small">Live Twitch chat is <span id="devChatStatus">OFF</span>. Add <br><code>?username=YourChannel</code><br> to the URL to connect.</div>
+    <label>Username</label>
+    <input type="text" id="devUsername" value="Camper1">
+    <label>Message</label>
+    <input type="text" id="devMessage" value="!join" onkeydown="if(event.key==='Enter')devSendChat();">
+    <label><input type="checkbox" id="devBroadcasterFlag"> Send as broadcaster (flags.broadcaster)</label>
+    <div>
+      <button onclick="devSendChat()">Send Chat Message</button>
+      <button onclick="devQuickJoin()">Quick !join</button>
+      <button onclick="devFloodJoins(5)">Flood 5 Random Joins</button>
+      <button onclick="devSendVote()">Quick !vote (random alive player)</button>
+      <button onclick="devSendStats()">Quick !stats</button>
+      <button onclick="devSendReset()">!resetslash (as broadcaster)</button>
+    </div>
+    <div id="devLog"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/comfy.js@latest/dist/comfy.min.js"></script>
+  <script>
+  /* =========================================================================
+   * SLASH ROYALE - LOCAL CONFIGURATION
+   * ========================================================================= */
+  const urlParams = new URLSearchParams(window.location.search);
+  const CHANNEL_NAME  = urlParams.get("username") || "PaladinArcade";
+  const LOBBY_SECONDS = 60;
+  const MIN_PLAYERS   = 2; 
+  const POLL_SECONDS  = 10; 
+
+  const ROOMS = [
+    { name: "Camp Cabin",      key: "cabin" },
+    { name: "Abandoned Mine",  key: "mine" },
+    { name: "Living Room",     key: "livingroom" },
+    { name: "Basement",        key: "basement" },
+    { name: "The Cemetery",    key: "cemetery" },
+    { name: "Attic",           key: "attic" },
+    { name: "The Meat Locker", key: "meatlocker" },
+    { name: "Boathouse",       key: "boathouse" },
+    { name: "The Woods",       key: "woods" },
+    { name: "The Gas Station", key: "gasstation" },
+    { name: "Abandoned Barn",  key: "barn" },
+    { name: "The Saw Mill",    key: "sawmill" }
+  ];
+
+  const HUNT_BANNER_MS       = 2200; 
+  const KILLER_ENTER_MS      = 990;  
+  const SLASH_TRAVEL_MS      = 935;  
+  const SLASH_HOLD_MS        = 1400; 
+  const FLEE_MS              = 1200; 
+  const ROOM_RECAP_MS        = 3500; 
+  const KILLER_INTRO_MS      = 6500; 
+  const FINAL_CHASE_INTRO_MS = 2200; 
+  const FINAL_CHASE_RUN_MS   = 1800; 
+  const WINNER_BANNER_HOLD_MS = 5200;
+  const MEMORIAM_HOLD_MS     = 6000; 
+  const FINAL_HOLD_SECONDS   = 24;
+  const RESULTS_CYCLE_MS     = 6000;
+  const STATS_CARD_MS        = 6000;
+
+  const FINAL_CHASE_CATCH_BONUS = 20; 
+
+  const KILLER_PERSONAS = [
+    { name: "Chad \"The Lawnmower\" Baxter", backstory: "Rejected from the camp counselor program in 1987. Never got over it. Or put down the mower." },
+    { name: "Gary \"Two-Face\" Wilkins", backstory: "Lost a coin flip once. Has been flipping back ever since." },
+    { name: "The Substitute", backstory: "Nobody remembers hiring him. Nobody remembers firing him either." },
+    { name: "Uncle Steve", backstory: "Just wanted everyone to be quiet during the game. Nobody listened." },
+    { name: "Sock Puppet Sal", backstory: "Banned from three camps for \"puppet-related incidents.\"" },
+    { name: "The HOA President", backstory: "You parked in his spot. Once. In 1994." },
+    { name: "Brenda from Accounting", backstory: "Nobody approved her overtime. Now nobody's getting out early." },
+    { name: "Two-Shed Tommy", backstory: "Owns two sheds. Uses both for the same thing." },
+    { name: "The Night Auditor", backstory: "Found a discrepancy in the campfire supply closet. Has never let it go." },
+    { name: "Larry \"Last Call\" Denton", backstory: "Got 86'd from the lodge bar. Came back anyway." },
+    { name: "The Pump Attendant", backstory: "Still charging 1990 prices. But it costs your life." },
+    { name: "Old Man Jenkins", backstory: "Told those kids to stay off his property. They didn't listen." },
+    { name: "The Lumberjack", backstory: "Replaced by automation. Took it out on the camp." }
+  ];
+  let currentKillerName = "The Killer"; 
+
+  const ROOM_COUNTDOWN_QUOTES = [
+    "Texas Stream-Saw Massacre", "BRB: Being Brutally Murdered", "Friday the 13th... on a Tuesday",
+    "I Know What You Did Last Hiding Spot", "A Nightmare on Your Chat", "Scream (Internally)",
+    "The Cabin in the Woods (This One)", "Don't Look Now. Seriously, Don't.", "The Evil Deadline",
+    "Saw: The Home Edition", "It Follows... on Twitch", "Child's Play, But With Knives",
+    "The Silence of the Campers", "Halloween: Every Day Now"
+  ];
+  const COUNTDOWN_STEP_MS = 1000; 
+
+  const HIDING_SPOTS = [
+    { left: 12, top: 78 }, { left: 24, top: 32 }, { left: 38, top: 82 },
+    { left: 50, top: 28 }, { left: 62, top: 80 }, { left: 76, top: 30 },
+    { left: 88, top: 78 }, { left: 50, top: 55 }
+  ];
+
+  const ROOM_HIDING_SPOTS = {
+    cabin: [ { left: 12, top: 20 }, { left: 80, top: 15 }, { left: 40, top: 85 }, { left: 22, top: 55 }, { left: 60, top: 60 }, { left: 50, top: 40 } ],
+    mine: [ { left: 17, top: 89 }, { left: 45, top: 84 }, { left: 64, top: 85 }, { left: 30, top: 55 }, { left: 70, top: 60 }, { left: 50, top: 35 } ],
+    livingroom: [ { left: 26, top: 87 }, { left: 43, top: 21 }, { left: 65, top: 88 }, { left: 15, top: 65 }, { left: 75, top: 60 }, { left: 55, top: 50 } ],
+    basement: [ { left: 16, top: 18 }, { left: 83, top: 85 }, { left: 30, top: 50 }, { left: 55, top: 35 }, { left: 45, top: 70 }, { left: 70, top: 55 } ],
+    attic: [ { left: 46, top: 84 }, { left: 67, top: 25 }, { left: 15, top: 60 }, { left: 55, top: 55 }, { left: 80, top: 70 }, { left: 25, top: 25 } ],
+    boathouse: [ { left: 32, top: 88 }, { left: 80, top: 83 }, { left: 50, top: 35 }, { left: 20, top: 55 }, { left: 65, top: 60 }, { left: 45, top: 20 } ],
+    woods: [ { left: 28, top: 87 }, { left: 78, top: 86 }, { left: 45, top: 50 }, { left: 20, top: 60 }, { left: 65, top: 35 }, { left: 55, top: 70 } ],
+    meatlocker: [ { left: 20, top: 25 }, { left: 75, top: 18 }, { left: 45, top: 80 }, { left: 15, top: 60 }, { left: 85, top: 55 }, { left: 50, top: 40 } ],
+    cemetery: [ { left: 22, top: 30 }, { left: 72, top: 20 }, { left: 47, top: 80 }, { left: 15, top: 55 }, { left: 80, top: 60 }, { left: 50, top: 50 } ],
+    gasstation: [ { left: 22, top: 25 }, { left: 72, top: 25 }, { left: 47, top: 80 }, { left: 15, top: 55 }, { left: 80, top: 60 }, { left: 50, top: 50 } ],
+    barn: [ { left: 27, top: 35 }, { left: 72, top: 80 }, { left: 57, top: 30 }, { left: 15, top: 65 }, { left: 85, top: 40 }, { left: 45, top: 80 } ],
+    sawmill: [ { left: 47, top: 50 }, { left: 17, top: 85 }, { left: 77, top: 35 }, { left: 20, top: 30 }, { left: 80, top: 70 }, { left: 50, top: 85 } ]
+  };
+
+  const EPITAPHS_BY_ROOM = {
+    cabin: [ "Went to check on that noise. Bad call.", "Should have stayed in the group chat.", "Hid in the wardrobe. Wardrobes don't lock.", "Tripped over the Wi-Fi cable.", "Thought the killer left. He didn't.", "Learned the hard way: bunk beds aren't bulletproof." ],
+    mine: [ "Wandered off looking for a signal bar.", "Followed the flickering light. Big mistake.", "Got lost in the tunnels. Found the killer instead.", "Should have brought a better flashlight.", "The minecart was not a great hiding spot.", "Echoed a scream right back at the killer." ],
+    livingroom: [ "Went to grab a snack. Never came back.", "Hid behind the curtains. Feet were showing.", "Turned the TV up to drown out the screaming.", "The sofa cushions offered zero protection.", "Answered the landline. Never a smart move.", "Should have called for help instead of pizza." ],
+    basement: [ "Went down to check the breaker. Never came back up.", "Hid behind the furnace. The furnace was louder than the screaming.", "Should have taken the stairs faster.", "Got tangled in the extension cords. Fatal, apparently.", "Thought the basement door locked from the inside. It didn't.", "Found the fuse box. Lost the plot." ],
+    attic: [ "Went up for the Christmas decorations. Became one.", "Hid behind the mannequin. The mannequin had better luck.", "The floor creaked. So did their last breath.", "Got spooked by their own shadow, then by something much worse.", "Should have left the old trunk closed.", "Learned the attic ladder doesn't retract fast enough." ],
+    boathouse: [ "Tried to paddle away. Forgot the oars.", "Hid under the canoe. Canoes don't float on land.", "Slipped on the dock. Never got back up.", "Should have untied the boat first.", "Thought the life vest would help. It did not.", "Went down with the ship. There was no ship." ],
+    woods: [ "Wandered off to find a signal bar. Found a killer instead.", "Should have stayed on the marked trail.", "Tripped over a root running from a bad decision.", "Thought the full moon was just for ambiance.", "Got spooked by an owl, then by something worse.", "Went to pee in the bushes. Famous last words: \"I'll be right back.\"" ],
+    cemetery: [ "Dug their own grave. Literally.", "Should have stayed out of the mausoleum.", "Tripped over a tombstone.", "Thought the statues were just decorations.", "Got caught dead in the graveyard." ],
+    meatlocker: [ "Thought it was just a side of beef. It wasn't.", "Slipped on the frost. Caught the hook.", "Tried to blend in with the cold cuts.", "Should have brought a heavier jacket.", "The door locks from the outside. Classic design flaw." ],
+    gasstation: [ "Tried to buy a hot dog. It was a trap.", "Couldn't solve the bathroom key puzzle.", "Pumped premium, got regular... and a machete.", "Ignored the 'No Smoking' sign. Boom.", "The jerky wasn't beef." ],
+    barn: [ "Found a needle in the haystack. And a pitchfork.", "The tractor started on its own.", "Hid in the silo. Silos are for grain, not people.", "Should have let sleeping dogs lie.", "Stepped on a rusty nail. Tetanus didn't get them first." ],
+    sawmill: [ "Ignored the 'Keep Hands Clear' sign.", "Went against the grain.", "The conveyor belt only goes one way.", "Didn't wear safety goggles.", "Split happens." ],
+    finalchase: [ "So close to the exit. So very close.", "The car wouldn't start. It's never gonna start.", "Looked back. You should never look back.", "Ran upstairs instead of outside. Classic.", "Made it to the door. The door was locked." ]
+  };
+
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  let DEV_MODE = new URLSearchParams(location.search).has("dev") || localStorage.getItem("slash_dev_mode") === "1";
+
+  let state = "IDLE"; 
+  let isLobbyOpen = false;
+  let isPlaying = false;
+  let stats = {};             
+  let queue = [];
+  let activePlayers = [];
+  let eliminationLog = [];    
+  let campersByName = {};     
+  
+  // POLL & ACHIEVEMENT STATE
+  let isPollActive = false;
+  let pollVotes = {}; 
+  let pollCandidates = {}; 
+  let roundVoters = {}; // { username: totalVotesCast }
+  let roundCorrect = {}; // { username: correctVotesCast }
+
+  let lobbyTimerHandle = null;
+  let lobbySecondsLeft = LOBBY_SECONDS;
+  let idleCycleHandle = null;
+  let resultsCycleHandle = null;
+  let statsCardTimeoutHandle = null;
+
+  const el = id => document.getElementById(id);
+  const panels = { IDLE: el("panelIdle"), LOBBY: el("panelLobby"), HUNT: el("panelHunt"), MEMORIAM: el("panelMemoriam"), RESULTS: el("panelResults") };
+
+  function setState(next) {
+    state = next;
+    isLobbyOpen = (state === "LOBBY");
+    isPlaying = (state === "LOBBY" || state === "HUNT" || state === "MEMORIAM");
+    Object.values(panels).forEach(p => p.classList.remove("active"));
+    panels[next].classList.add("active");
+  }
+
+  // --- LOCAL STORAGE MIGRATION ---
+  async function loadStats() {
+    try {
+      const stored = localStorage.getItem("slash_royale_stats");
+      stats = stored ? JSON.parse(stored) : {};
+    } catch (err) { console.error("Slash Royale: failed to load local stats.", err); stats = {}; }
+  }
+
+  async function saveStats() {
+    try {
+      localStorage.setItem("slash_royale_stats", JSON.stringify(stats));
+    } catch (err) { console.error("Slash Royale: failed to save local stats.", err); }
+  }
+  // -------------------------------
+
+  function renderLeaderboardInto(listId) {
+    const rows = Object.entries(stats).map(([name, s]) => ({ name, wins: s.wins || 0, totalPoints: s.totalPoints || 0 }))
+      .sort((a, b) => (b.wins - a.wins) || (b.totalPoints - a.totalPoints)).slice(0, 5);
+    const list = el(listId); list.innerHTML = "";
+    if (rows.length === 0) { list.innerHTML = `<li><span>No games played yet</span></li>`; return; }
+    rows.forEach(r => {
+      const li = document.createElement("li");
+      li.innerHTML = `<span>${r.name}</span><span>${r.wins} Escapes | ${r.totalPoints} pts</span>`;
+      list.appendChild(li);
+    });
+  }
+  function renderLeaderboard() { renderLeaderboardInto("leaderboardList"); }
+
+  function startIdleCycle() {
+    clearInterval(idleCycleHandle); let showingBoard = false;
+    idleCycleHandle = setInterval(() => {
+      if (state !== "IDLE") return;
+      showingBoard = !showingBoard;
+      el("idlePrompt").style.display = showingBoard ? "none" : "block";
+      el("hallOfFame").style.display = showingBoard ? "block" : "none";
+      if (showingBoard) renderLeaderboard();
+    }, 6000);
+  }
+
+  function enterIdle() {
+    setState("IDLE"); clearTimeout(statsCardTimeoutHandle);
+    el("statsCard").style.display = "none"; el("idlePrompt").style.display = "block"; el("hallOfFame").style.display = "none";
+    startIdleCycle();
+  }
+
+  function showStatsCard(username) {
+    clearInterval(idleCycleHandle); clearTimeout(statsCardTimeoutHandle);
+    el("idlePrompt").style.display = "none"; el("hallOfFame").style.display = "none";
+    const s = stats[username];
+    el("statsCardName").textContent = `${username}'s Stats`;
+    const body = el("statsCardBody");
+    if (!s || !s.gamesPlayed) body.innerHTML = `<div class="stat-row"><span>No games played yet</span></div>`;
+    else {
+      const losses = s.gamesPlayed - s.wins;
+      body.innerHTML = `
+        <div class="stat-row"><span>Games Played</span><span>${s.gamesPlayed}</span></div>
+        <div class="stat-row"><span>Escapes - Deaths</span><span>${s.wins} - ${losses}</span></div>
+        <div class="stat-row"><span>Total Points</span><span>${s.totalPoints}</span></div>
+      `;
+    }
+    el("statsCard").style.display = "block";
+    statsCardTimeoutHandle = setTimeout(() => { if (state === "IDLE") enterIdle(); }, STATS_CARD_MS);
+  }
+
+  function showToast(message) {
+    const toast = el("toast"); toast.textContent = message; toast.classList.remove("show");
+    void toast.offsetWidth; toast.classList.add("show");
+  }
+
+  function renderLobbyList() {
+    const list = el("lobbyList"); list.innerHTML = "";
+    queue.forEach((name, i) => {
+      const li = document.createElement("li"); li.textContent = name;
+      if (i === queue.length - 1) li.classList.add("glitch-in");
+      list.appendChild(li);
+    });
+  }
+
+  function openLobby() {
+    clearInterval(idleCycleHandle); clearInterval(resultsCycleHandle); clearTimeout(statsCardTimeoutHandle);
+    el("statsCard").style.display = "none"; queue = []; lobbySecondsLeft = LOBBY_SECONDS;
+    setState("LOBBY"); el("lobbyTimer").textContent = lobbySecondsLeft; renderLobbyList();
+    lobbyTimerHandle = setInterval(() => {
+      lobbySecondsLeft--; el("lobbyTimer").textContent = lobbySecondsLeft;
+      if (lobbySecondsLeft <= 0) { clearInterval(lobbyTimerHandle); playRound(); }
+    }, 1000);
+  }
+
+  function handleJoin(username) {
+    if (!isLobbyOpen) openLobby();
+    if (queue.includes(username)) return;
+    queue.push(username); renderLobbyList();
+    const s = stats[username];
+    showToast(s && s.wins ? `${username} joined! (${s.wins} career escapes)` : `${username} joined!`);
+  }
+
+  /* ================= POLL LOGIC ================= */
+  function renderPoll() {
+    const counts = {};
+    Object.values(pollVotes).forEach(name => { counts[name] = (counts[name] || 0) + 1; });
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    
+    const list = el("pollResultsList");
+    list.innerHTML = sorted.length ? 
+        sorted.map(([name, count]) => `<li><span class="name">${name}</span><span class="count">${count}</span></li>`).join("") :
+        `<li><span class="name" style="color:#666">No votes yet</span></li>`;
+  }
+
+  async function runPoll(players) {
+    isPollActive = true; pollVotes = {};
+    pollCandidates = players.reduce((acc, p) => { acc[p.toLowerCase()] = p; return acc; }, {});
+    el("pollOverlay").classList.add("show");
+    renderPoll();
+    for (let i = POLL_SECONDS; i > 0; i--) {
+        el("pollTimer").textContent = i;
+        await sleep(1000);
+    }
+    isPollActive = false; el("pollTimer").textContent = "VOTING CLOSED";
+    await sleep(1500);
+    el("pollOverlay").classList.remove("show");
+  }
+
+  let currentRoomKey = "cabin";
+  function setRoomTheme(themeKey) {
+    currentRoomKey = themeKey;
+    el("huntFloor").className = "theme-" + themeKey;
+    el("exitDoor").style.display = themeKey === "chase" ? "block" : "none";
+  }
+
+  function hashUsername(name) {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+    return hash;
+  }
+
+  function renderCampers(players) {
+    const layer = el("camperLayer"); layer.innerHTML = ""; campersByName = {};
+    const spots = ROOM_HIDING_SPOTS[currentRoomKey] || HIDING_SPOTS;
+    players.forEach((name, i) => {
+      const spot = spots[i % spots.length];
+      const hash = hashUsername(name);
+      const sprite = document.createElement("div");
+      sprite.className = "camper-sprite alive";
+      sprite.style.left = spot.left + "%"; sprite.style.top = spot.top + "%";
+      sprite.style.setProperty("--shirt-color", `hsl(${hash % 360}, 55%, 45%)`);
+      sprite.style.setProperty("--hair-color", `hsl(${(hash * 7) % 360}, 40%, 30%)`);
+      sprite.innerHTML = `<div class="label">${name}</div><div class="head"></div><div class="body"></div>`;
+      layer.appendChild(sprite);
+      campersByName[name] = { el: sprite, spot };
+    });
+  }
+
+  function positionKillerAtStart() {
+    const k = el("killerSprite");
+    k.style.transition = "none";
+    k.style.left = "-10%"; k.style.top = "50%"; k.style.opacity = "1"; k.classList.add("stalking");
+    void k.offsetWidth;
+    k.style.transition = `left ${SLASH_TRAVEL_MS}ms cubic-bezier(0.68, -0.55, 0.265, 1.55), top ${SLASH_TRAVEL_MS}ms ease-in`;
+  }
+
+  async function moveKillerTo(leftPct, topPct) {
+    const k = el("killerSprite"); k.style.left = leftPct + "%"; k.style.top = topPct + "%";
+    await sleep(SLASH_TRAVEL_MS);
+  }
+
+  function resetHuntFloor() {
+    el("camperLayer").innerHTML = ""; campersByName = {};
+    const k = el("killerSprite");
+    k.style.transition = "none"; k.style.opacity = "0"; k.classList.remove("stalking");
+    el("bloodSplat").classList.remove("show"); el("bloodSplat").style.opacity = "0";
+    el("slashFx").classList.remove("show"); el("slashFx").style.opacity = "0";
+    el("countdownOverlay").classList.remove("show");
+  }
+
+  async function showRoomCountdown() {
+    el("countdownQuote").textContent = ROOM_COUNTDOWN_QUOTES[Math.floor(Math.random() * ROOM_COUNTDOWN_QUOTES.length)];
+    const numberEl = el("countdownNumber");
+    el("countdownOverlay").classList.add("show");
+    for (const n of [3, 2, 1]) {
+      numberEl.textContent = n; numberEl.style.animation = "none"; void numberEl.offsetWidth; numberEl.style.animation = "";
+      await sleep(COUNTDOWN_STEP_MS);
+    }
+    el("countdownOverlay").classList.remove("show");
+  }
+
+  function triggerSlash(leftPct, topPct) {
+    const fx = el("slashFx");
+    fx.style.left = leftPct + "%"; fx.style.top = topPct + "%";
+    fx.classList.remove("show"); void fx.offsetWidth; fx.classList.add("show");
+    const splat = el("bloodSplat");
+    splat.style.left = leftPct + "%"; splat.style.top = topPct + "%";
+    splat.classList.remove("show"); void splat.offsetWidth; splat.classList.add("show");
+  }
+
+  function showBanner(text, cls) {
+    const b = el("eventBanner");
+    b.textContent = text; b.className = ""; void b.offsetWidth; b.classList.add("show");
+    if (cls) b.classList.add(cls);
+  }
+
+  function shuffledOutcomes(n, survivorsCount) {
+    const arr = new Array(n).fill(false);
+    for (let i = 0; i < survivorsCount; i++) arr[i] = true;
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function eliminationCountFor(remaining) { return Math.min(remaining >= 7 ? 2 : 1, remaining - 1); }
+  function pointsForRound(roundNum) { return roundNum * 15; }
+
+  async function showKillerIntro() {
+    const persona = KILLER_PERSONAS[Math.floor(Math.random() * KILLER_PERSONAS.length)];
+    currentKillerName = persona.name;
+    el("killerIntroName").textContent = persona.name; el("killerIntroBackstory").textContent = persona.backstory;
+    el("roomTitle").textContent = "WHO'S HUNTING TONIGHT?"; el("turnInfo").textContent = " ";
+    el("huntFloor").style.display = "none"; el("killerIntro").classList.add("show");
+    await sleep(KILLER_INTRO_MS);
+    el("killerIntro").classList.remove("show"); el("huntFloor").style.display = "";
+  }
+
+  function fleeSurvivors(survivors) {
+    survivors.forEach(name => {
+      const sprite = campersByName[name].el;
+      sprite.classList.remove("alive"); sprite.classList.add("fleeing");
+      sprite.style.transition = `left ${FLEE_MS}ms ease-in`; sprite.style.left = "108%";
+    });
+    return sleep(FLEE_MS);
+  }
+
+  async function showHuntRecap(roomLabel, survivors, caught) {
+    el("huntFloor").style.display = "none"; el("turnInfo").textContent = " ";
+    el("huntRecapTitle").textContent = `${roomLabel.toUpperCase()} COMPLETE`;
+    el("huntRecapEscaped").innerHTML = survivors.length ? survivors.map(n => `<li>${n}</li>`).join("") : `<li>(none)</li>`;
+    el("huntRecapCaught").innerHTML = caught.length ? caught.map(n => `<li>${n}</li>`).join("") : `<li>(none)</li>`;
+    el("huntRecap").classList.add("show");
+    await sleep(ROOM_RECAP_MS);
+    el("huntRecap").classList.remove("show"); el("huntFloor").style.display = "";
+  }
+
+  async function runHuntRound(players, room, roundNum, elimCount) {
+    setRoomTheme(room.key); resetHuntFloor();
+    el("roomTitle").textContent = room.name.toUpperCase(); el("turnInfo").textContent = " ";
+    showBanner(`${room.name.toUpperCase()} - ${players.length} REMAIN`, "");
+    await sleep(HUNT_BANNER_MS);
+
+    renderCampers(players);
+    await runPoll(players);
+    await showRoomCountdown();
+    positionKillerAtStart();
+    await sleep(KILLER_ENTER_MS);
+
+    const survivorsTarget = players.length - elimCount;
+    const outcomes = shuffledOutcomes(players.length, survivorsTarget);
+    const survivors = players.filter((_, i) => outcomes[i]);
+    const victims = players.filter((_, i) => !outcomes[i]);
+
+    // Check Votes for Achievements
+    Object.entries(pollVotes).forEach(([voter, target]) => {
+      roundVoters[voter] = (roundVoters[voter] || 0) + 1;
+      if (victims.includes(target)) {
+        roundCorrect[voter] = (roundCorrect[voter] || 0) + 1;
+      }
+    });
+
+    for (const name of victims) {
+      const { el: sprite, spot } = campersByName[name];
+      await moveKillerTo(spot.left, spot.top);
+      triggerSlash(spot.left, spot.top);
+      sprite.classList.remove("alive"); sprite.classList.add("caught");
+      el("turnInfo").textContent = `${name} has expired!`;
+      showBanner(`${name} DIDN'T MAKE IT!`, "fail");
+      eliminationLog.push({ name, room: room.name, points: pointsForRound(roundNum) });
+      await sleep(SLASH_HOLD_MS);
+    }
+
+    if (survivors.length) {
+      el("turnInfo").textContent = " ";
+      const roomUpper = room.name.toUpperCase();
+      showBanner(`${survivors.length} SURVIVOR${survivors.length === 1 ? "" : "S"} ESCAPED ${roomUpper.startsWith("THE ") ? roomUpper : `THE ${roomUpper}`}!`, "success");
+      await fleeSurvivors(survivors);
+    }
+
+    await showHuntRecap(room.name, survivors, victims);
+    return survivors;
+  }
+
+  async function runFinalChase(name, roundNum) {
+    setRoomTheme("chase"); resetHuntFloor();
+    el("roomTitle").textContent = "FINAL CHASE"; el("turnInfo").textContent = `${name} makes a run for the door...`;
+    showBanner(`FINAL CHASE - ${name} VS THE KILLER`, "");
+    await sleep(FINAL_CHASE_INTRO_MS);
+
+    renderCampers([name]);
+    campersByName[name].el.style.left = "8%"; campersByName[name].el.style.top = "50%";
+    
+    await runPoll([name]);
+    await showRoomCountdown();
+    positionKillerAtStart();
+
+    const escapes = Math.random() < 0.5;
+    const sprite = campersByName[name].el;
+    const exitLeft = 88, exitTop = 50;
+    const catchLeft = escapes ? exitLeft : 55;
+
+    // Check Votes for Final Chase
+    Object.entries(pollVotes).forEach(([voter, target]) => {
+      roundVoters[voter] = (roundVoters[voter] || 0) + 1;
+      if (!escapes && target.toLowerCase() === name.toLowerCase()) {
+        roundCorrect[voter] = (roundCorrect[voter] || 0) + 1;
+      }
+    });
+
+    sprite.style.transition = `left ${FINAL_CHASE_RUN_MS}ms ease-in, top ${FINAL_CHASE_RUN_MS}ms ease-in`;
+    sprite.style.left = catchLeft + "%"; sprite.style.top = exitTop + "%";
+    el("killerSprite").style.transition = `left ${FINAL_CHASE_RUN_MS}ms linear`;
+    el("killerSprite").style.left = (catchLeft - 14) + "%"; el("killerSprite").style.top = exitTop + "%";
+    await sleep(FINAL_CHASE_RUN_MS);
+
+    if (escapes) return true;
+    triggerSlash(catchLeft, exitTop);
+    sprite.classList.remove("alive"); sprite.classList.add("caught");
+    eliminationLog.push({ name, room: "Final Chase", points: pointsForRound(roundNum) + FINAL_CHASE_CATCH_BONUS });
+    await sleep(SLASH_HOLD_MS);
+    return false;
+  }
+
+  function epitaphRoomFor(roomLabel) {
+    if (roomLabel === "Final Chase") return "finalchase";
+    const found = ROOMS.find(r => r.name === roomLabel);
+    return found ? found.key : "cabin";
+  }
+
+  function randomEpitaph(roomLabel, excludeEpitaph) {
+    const pool = EPITAPHS_BY_ROOM[epitaphRoomFor(roomLabel)];
+    let available = pool.filter(e => e !== excludeEpitaph);
+    if (available.length === 0) available = pool; 
+    return available[Math.floor(Math.random() * available.length)];
+  }
+
+  function fillEvidenceCard(card, entry, excludeEpitaph) {
+    card.querySelector(".evidence-name").textContent = entry.name;
+    card.querySelector(".evidence-cause").textContent = entry.room === "Final Chase" ? "Cornered in the Final Chase" : `Expired in ${entry.room.startsWith("The ") ? entry.room : `the ${entry.room}`}`;
+    const chosenEpitaph = randomEpitaph(entry.room, excludeEpitaph);
+    card.querySelector(".evidence-epitaph").textContent = `"${chosenEpitaph}"`;
+    card.style.display = ""; card.classList.remove("show"); void card.offsetWidth; card.classList.add("show");
+    return chosenEpitaph;
+  }
+
+  async function showMemoriam(elimLog) {
+    if (elimLog.length === 0) return;
+    setState("MEMORIAM");
+    const card1 = el("evidenceCard1"), card2 = el("evidenceCard2");
+    for (let i = 0; i < elimLog.length; i += 2) {
+      const ep1 = fillEvidenceCard(card1, elimLog[i], null);
+      if (elimLog[i + 1]) fillEvidenceCard(card2, elimLog[i + 1], ep1);
+      else { card2.classList.remove("show"); card2.style.display = "none"; }
+      await sleep(MEMORIAM_HOLD_MS);
+    }
+  }
+
+  async function playRound() {
+    setState("HUNT"); activePlayers = [...queue]; queue = []; eliminationLog = [];
+    roundVoters = {}; roundCorrect = {};
+    if (activePlayers.length < MIN_PLAYERS) { showFinalResults(null, [], activePlayers[0] || null); return; }
+    
+    await showKillerIntro();
+    let roundNum = 0;
+    while (activePlayers.length > 1) {
+      roundNum++;
+      activePlayers = await runHuntRound(activePlayers, ROOMS[(roundNum - 1) % ROOMS.length], roundNum, eliminationCountFor(activePlayers.length));
+    }
+    const finalSurvivor = activePlayers[0];
+    const escaped = await runFinalChase(finalSurvivor, roundNum + 1);
+    if (escaped) showBanner(`${finalSurvivor.toUpperCase()} ESCAPED THE NIGHT!`, "success");
+    else showBanner(`${currentKillerName.toUpperCase()} CLAIMS ${finalSurvivor.toUpperCase()}!`, "fail");
+    
+    await sleep(WINNER_BANNER_HOLD_MS);
+    await showMemoriam(eliminationLog);
+
+    // The audience reward joke
+    showBanner("CONGRATS ON YOUR ACHIEVEMENTS. YOUR PRIZE IS NOTHING.", "fail");
+    await sleep(3500);
+
+    const winner = escaped ? finalSurvivor : null;
+    applyResultsToStats(winner, eliminationLog);
+    await saveStats();
+    showFinalResults(winner, eliminationLog, null);
+  }
+
+  const WINNER_POINTS = 100;
+  function applyResultsToStats(winner, elimLog) {
+    function ensure(name) { if (!stats[name]) stats[name] = { gamesPlayed: 0, wins: 0, totalPoints: 0 }; return stats[name]; }
+    elimLog.forEach(({ name, points }) => { const s = ensure(name); s.gamesPlayed += 1; s.totalPoints += points; });
+    if (winner) { const s = ensure(winner); s.gamesPlayed += 1; s.wins += 1; s.totalPoints += WINNER_POINTS; }
+  }
+
+  function showFinalResults(winner, elimLog, soloName) {
+    setState("RESULTS");
+    el("finalTitle").textContent = winner ? `${winner.toUpperCase()} ESCAPED!` : (elimLog.length ? `${currentKillerName.toUpperCase()} WINS!` : "ROUND OVER");
+    const list = el("finalRecapList"); list.innerHTML = "";
+    
+    if (soloName) list.innerHTML = `<li>${soloName} joined alone - need at least ${MIN_PLAYERS} players for Slash Royale!</li>`;
+    else if (!winner && elimLog.length === 0) list.innerHTML = `<li>No players joined this round.</li>`;
+    else {
+      if (winner) {
+        const li = document.createElement("li"); li.classList.add("winner-row");
+        li.innerHTML = `<span>\u{1F3C3} ${winner}</span><span>ESCAPED (+${WINNER_POINTS})</span>`; list.appendChild(li);
+      }
+      [...elimLog].sort((a, b) => b.points - a.points).forEach(e => {
+        const li = document.createElement("li");
+        if (e.room === "Final Chase" && !winner) li.classList.add("killer-row");
+        li.innerHTML = `<span>${e.name}</span><span>Expired - ${e.room} (+${e.points})</span>`; list.appendChild(li);
+      });
+      
+      // Calculate & Display Awards
+      let bestOracle = Object.entries(roundCorrect).sort((a,b) => b[1] - a[1])[0];
+      let mostActive = Object.entries(roundVoters).sort((a,b) => b[1] - a[1])[0];
+      
+      if (bestOracle || mostActive) {
+        const divider = document.createElement("li");
+        divider.innerHTML = `<span style="color:#6b0000">--------------------</span><span style="color:#6b0000">------</span>`;
+        list.appendChild(divider);
+        
+        if (bestOracle && bestOracle[1] > 0) {
+          const li = document.createElement("li");
+          li.innerHTML = `<span style="color:#ffcc00">Crystal Ball: ${bestOracle[0]}</span><span style="color:#ffcc00">${bestOracle[1]} correct</span>`;
+          list.appendChild(li);
+        }
+        if (mostActive && mostActive[1] > 0) {
+          const li2 = document.createElement("li");
+          li2.innerHTML = `<span style="color:#ffcc00">Loudest Voice: ${mostActive[0]}</span><span style="color:#ffcc00">${mostActive[1]} votes</span>`;
+          list.appendChild(li2);
+        }
+      }
+    }
+    
+    startResultsCycle();
+    setTimeout(() => { if (state === "RESULTS") { clearInterval(resultsCycleHandle); enterIdle(); } }, FINAL_HOLD_SECONDS * 1000);
+  }
+
+  function startResultsCycle() {
+    clearInterval(resultsCycleHandle); let showingAllTime = false;
+    el("finalRecapView").classList.add("showing"); el("allTimeView").classList.remove("showing");
+    resultsCycleHandle = setInterval(() => {
+      if (state !== "RESULTS") { clearInterval(resultsCycleHandle); return; }
+      showingAllTime = !showingAllTime;
+      el("finalRecapView").classList.toggle("showing", !showingAllTime); el("allTimeView").classList.toggle("showing", showingAllTime);
+      if (showingAllTime) renderLeaderboardInto("resultsLeaderboardList");
+    }, RESULTS_CYCLE_MS);
+  }
+
+  async function handleResetStats() { stats = {}; await saveStats(); renderLeaderboard(); }
+
+  function onChatCommand(user, message, flags) {
+    const text = (message || "").trim().toLowerCase();
+    
+    if (text.startsWith("!vote ") && isPollActive) {
+      const targetArg = text.replace("!vote ", "").trim().toLowerCase();
+      if (pollCandidates[targetArg]) {
+        pollVotes[user] = pollCandidates[targetArg];
+        renderPoll();
+      }
+      return;
+    }
+
+    if (text === "!join") { if (!isPlaying || isLobbyOpen) handleJoin(user); return; }
+    if (text === "!resetslash" && flags && flags.broadcaster) { handleResetStats(); return; }
+    if (text === "!stats" && state === "IDLE") { showStatsCard(user); return; }
+  }
+
+  function connectTwitch() {
+    console.log(`Slash Royale: connecting to Twitch chat channel "${CHANNEL_NAME}"...`);
+    ComfyJS.onChat = (user, message, flags) => onChatCommand(user, message, flags);
+    ComfyJS.onCommand = (user, command, message, flags) => onChatCommand(user, `!${command}`, flags);
+    ComfyJS.Init(CHANNEL_NAME);
+  }
+
+  function devLog(line) {
+    const box = el("devLog"); const entry = document.createElement("div");
+    entry.textContent = line; box.prepend(entry);
+  }
+  function devSendChat() {
+    const user = el("devUsername").value.trim() || "TestUser";
+    const message = el("devMessage").value;
+    const broadcaster = el("devBroadcasterFlag").checked;
+    onChatCommand(user, message, { broadcaster });
+    devLog(`${user}: ${message}${broadcaster ? " [broadcaster]" : ""}`);
+  }
+  function devQuickJoin() { el("devMessage").value = "!join"; devSendChat(); }
+  function devFloodJoins(n) {
+    const names = ["Camper", "Runner", "Hider", "Screamer", "Sprinter", "Dodger", "Yeeter"];
+    for (let i = 0; i < n; i++) {
+      const name = names[Math.floor(Math.random() * names.length)] + Math.floor(Math.random() * 1000);
+      onChatCommand(name, "!join", {}); devLog(`${name}: !join`);
+    }
+  }
+  function devSendVote() {
+    if (activePlayers.length > 0) {
+      const randomPlayer = activePlayers[Math.floor(Math.random() * activePlayers.length)];
+      el("devMessage").value = `!vote ${randomPlayer}`;
+      devSendChat();
+    } else {
+      devLog("Start a round first to test voting.");
+    }
+  }
+  function devSendStats() { el("devMessage").value = "!stats"; devSendChat(); }
+  function devSendReset() { el("devMessage").value = "!resetslash"; el("devBroadcasterFlag").checked = true; devSendChat(); }
+
+  el("devToggleBtn").addEventListener("click", () => {
+    localStorage.setItem("slash_dev_mode", localStorage.getItem("slash_dev_mode") === "1" ? "0" : "1");
+    location.reload();
+  });
+
+  (async function init() {
+    await loadStats(); enterIdle();
+    if (DEV_MODE) {
+      el("devPanel").classList.add("show");
+      const connectBtn = document.createElement("button");
+      connectBtn.textContent = "Connect to Twitch Chat";
+      connectBtn.onclick = () => { connectTwitch(); el("devChatStatus").textContent = "ON (live)"; connectBtn.disabled = true; };
+      el("devPanel").appendChild(connectBtn);
+    } else connectTwitch();
+  })();
+  </script>
+</body>
+</html>
