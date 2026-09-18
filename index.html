@@ -291,6 +291,34 @@
   #countdownNumber { font-size: 64px; color: #ff2b2b; text-shadow: 0 0 20px rgba(255,20,20,0.8), 3px 3px 0 #000; animation: countdownPulse 0.7s ease-in-out; }
   @keyframes countdownPulse { 0% { transform: scale(1.6); opacity: 0; } 30% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
 
+  /* ================= LOCKED DOOR UI ================= */
+  #lockedDoorOverlay {
+    display: none; position: absolute; inset: 0; z-index: 12;
+    background: rgba(0,0,0,0.7); box-sizing: border-box; padding: 20px;
+    flex-direction: column; align-items: center; justify-content: center;
+  }
+  #lockedDoorOverlay.show { display: flex; animation: doorSlam 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+  @keyframes doorSlam { 0% { transform: scale(1.4); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  
+  .door-frame {
+    width: 100%; height: 100%; border: 16px solid #2a1a10; background: #3a2414;
+    position: relative; box-shadow: inset 0 0 60px #000;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .door-frame::after {
+    content: ""; position: absolute; right: 15px; top: 50%;
+    width: 20px; height: 20px; border-radius: 50%; background: #b89c49; box-shadow: -2px 2px 4px #000;
+  }
+  .door-sign {
+    background: #efe6d0; border: 3px solid #b8ab88; padding: 15px 20px;
+    transform: rotate(-3deg); box-shadow: 4px 6px 0 rgba(0,0,0,0.5); text-align: center;
+  }
+  .door-sign h2 { color: #b30000; font-size: var(--fs-md); margin-bottom: 10px; text-shadow: none; }
+  .door-sign .pwd { font-size: 20px; color: #111; letter-spacing: 2px; font-weight: bold; background: #fff; padding: 4px 10px; border: 2px dashed #666; display: inline-block;}
+  #doorTimer { font-size: 50px; color: #ff2b2b; text-shadow: 3px 3px 0 #000; margin-top: 25px; }
+  #doorTimer.panic { color: #ffcc00; animation: panicShake 0.2s infinite; }
+  @keyframes panicShake { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(4px); } }
+
   #eventBanner { position: absolute; left: 5%; right: 5%; top: 40%; transform: translateY(-50%); text-align: center; font-size: var(--fs-md); color: #ff2b2b; text-shadow: 2px 2px 0 #000; z-index: 10; opacity: 0; pointer-events: none; }
   #eventBanner.show { animation: bannerPop 1.4s ease-out 1; }
   #eventBanner.success { color: #7fffb0; }
@@ -462,6 +490,19 @@
         <div id="exitDoor" class="prop prop-exit-door" style="display:none;"></div>
 
         <div id="camperLayer"></div>
+        
+        <!-- LOCKED DOOR UI -->
+        <div id="lockedDoorOverlay">
+          <div class="door-frame">
+            <div class="door-sign">
+              <h2>DOOR LOCKED!</h2>
+              <div style="font-size: 10px; color: #333; margin-bottom: 8px;">TYPE PASSWORD IN CHAT TO UNLOCK</div>
+              <div class="pwd" id="doorPasswordDisplay">PASSWORD</div>
+            </div>
+            <div id="doorTimer">5</div>
+          </div>
+        </div>
+
         <div id="countdownOverlay">
           <div id="countdownQuote"></div>
           <div id="countdownNumber">3</div>
@@ -541,7 +582,8 @@
       <button onclick="devSendChat()">Send Chat Message</button>
       <button onclick="devQuickJoin()">Quick !join</button>
       <button onclick="devFloodJoins(5)">Flood 5 Random Joins</button>
-      <button onclick="devSendVote()">Quick !vote (random alive player)</button>
+      <button onclick="devSendVote()">Quick !vote / !live / !die</button>
+      <button onclick="devUnlockDoor()">Quick Unlock Door</button>
       <button onclick="devSendStats()">Quick !stats</button>
       <button onclick="devSendReset()">!resetslash (as broadcaster)</button>
     </div>
@@ -572,6 +614,13 @@
     { name: "The Gas Station", key: "gasstation" },
     { name: "Abandoned Barn",  key: "barn" },
     { name: "The Saw Mill",    key: "sawmill" }
+  ];
+
+  const DOOR_PASSWORDS = [
+    "banana", "encyclopedia", "mississippi", "taco truck", 
+    "chupacabra", "snickerdoodle", "kerfuffle", "bamboozle", 
+    "spatula", "marshmallow", "pumpernickel", "chainsaw", 
+    "bloodcurdling", "poltergeist", "necronomicon"
   ];
 
   const HUNT_BANNER_MS       = 2200; 
@@ -668,10 +717,17 @@
   
   // POLL & ACHIEVEMENT STATE
   let isPollActive = false;
+  let isFinalChasePoll = false;
   let pollVotes = {}; 
   let pollCandidates = {}; 
   let roundVoters = {}; // { username: totalVotesCast }
   let roundCorrect = {}; // { username: correctVotesCast }
+
+  // DOOR MINIGAME STATE
+  let isDoorLocked = false;
+  let doorPassword = "";
+  let doorUnlocker = "";
+  let doorUnlocked = false;
 
   let lobbyTimerHandle = null;
   let lobbySecondsLeft = LOBBY_SECONDS;
@@ -798,16 +854,31 @@
         `<li><span class="name" style="color:#666">No votes yet</span></li>`;
   }
 
-  async function runPoll(players) {
-    isPollActive = true; pollVotes = {};
-    pollCandidates = players.reduce((acc, p) => { acc[p.toLowerCase()] = p; return acc; }, {});
+  async function runPoll(players, isFinal = false) {
+    isPollActive = true; 
+    isFinalChasePoll = isFinal;
+    pollVotes = {};
+    
+    if (isFinal) {
+      pollCandidates = { "live": "Live", "die": "Die" };
+      el("pollHeader").textContent = "WILL THEY SURVIVE?";
+      el("pollHint").innerHTML = `Type <span class="highlight">!live</span> or <span class="highlight">!die</span>`;
+    } else {
+      pollCandidates = players.reduce((acc, p) => { acc[p.toLowerCase()] = p; return acc; }, {});
+      el("pollHeader").textContent = "WHO EXPIRES NEXT?";
+      el("pollHint").innerHTML = `Type <span class="highlight">!vote [name]</span>`;
+    }
+
     el("pollOverlay").classList.add("show");
     renderPoll();
+    
     for (let i = POLL_SECONDS; i > 0; i--) {
         el("pollTimer").textContent = i;
         await sleep(1000);
     }
-    isPollActive = false; el("pollTimer").textContent = "VOTING CLOSED";
+    
+    isPollActive = false; 
+    el("pollTimer").textContent = "VOTING CLOSED";
     await sleep(1500);
     el("pollOverlay").classList.remove("show");
   }
@@ -939,7 +1010,7 @@
     await sleep(HUNT_BANNER_MS);
 
     renderCampers(players);
-    await runPoll(players);
+    await runPoll(players, false);
     await showRoomCountdown();
     positionKillerAtStart();
     await sleep(KILLER_ENTER_MS);
@@ -988,7 +1059,7 @@
     renderCampers([name]);
     campersByName[name].el.style.left = "8%"; campersByName[name].el.style.top = "50%";
     
-    await runPoll([name]);
+    await runPoll([name], true);
     await showRoomCountdown();
     positionKillerAtStart();
 
@@ -1000,7 +1071,7 @@
     // Check Votes for Final Chase
     Object.entries(pollVotes).forEach(([voter, target]) => {
       roundVoters[voter] = (roundVoters[voter] || 0) + 1;
-      if (!escapes && target.toLowerCase() === name.toLowerCase()) {
+      if ((escapes && target === "Live") || (!escapes && target === "Die")) {
         roundCorrect[voter] = (roundCorrect[voter] || 0) + 1;
       }
     });
@@ -1011,7 +1082,59 @@
     el("killerSprite").style.left = (catchLeft - 14) + "%"; el("killerSprite").style.top = exitTop + "%";
     await sleep(FINAL_CHASE_RUN_MS);
 
-    if (escapes) return true;
+    // LOCKED DOOR MINIGAME
+    if (escapes) {
+      const isLocked = Math.random() < 0.5; // 50% chance the door is locked
+      
+      if (isLocked) {
+        isDoorLocked = true;
+        doorUnlocked = false;
+        doorUnlocker = name.toLowerCase();
+        doorPassword = DOOR_PASSWORDS[Math.floor(Math.random() * DOOR_PASSWORDS.length)];
+        
+        el("doorPasswordDisplay").textContent = doorPassword.toUpperCase();
+        el("lockedDoorOverlay").classList.add("show");
+        
+        // 5s Visual Timer, 7s Actual Timer
+        let visualTime = 5;
+        el("doorTimer").textContent = visualTime;
+        el("doorTimer").classList.remove("panic");
+
+        let ticks = 70; // 70 ticks of 100ms = 7 seconds
+        while (ticks > 0 && !doorUnlocked) {
+          await sleep(100);
+          ticks--;
+          if (ticks % 10 === 0) {
+            visualTime--;
+            if (visualTime > 0) {
+              el("doorTimer").textContent = visualTime;
+            } else {
+              el("doorTimer").textContent = "0";
+              el("doorTimer").classList.add("panic"); // Hidden grace period kicks in
+            }
+          }
+        }
+        
+        isDoorLocked = false;
+        el("lockedDoorOverlay").classList.remove("show");
+        
+        if (doorUnlocked) {
+          showBanner(`PASSWORD ACCEPTED!`, "success");
+          await sleep(1000);
+          return true;
+        } else {
+          // They failed to type it in time
+          triggerSlash(catchLeft, exitTop);
+          sprite.classList.remove("alive"); sprite.classList.add("caught");
+          eliminationLog.push({ name, room: "Final Chase", points: pointsForRound(roundNum) + FINAL_CHASE_CATCH_BONUS });
+          await sleep(SLASH_HOLD_MS);
+          return false;
+        }
+      }
+      return true; // Escapes normally (door was unlocked)
+    }
+
+    // Caught immediately 
     triggerSlash(catchLeft, exitTop);
     sprite.classList.remove("alive"); sprite.classList.add("caught");
     eliminationLog.push({ name, room: "Final Chase", points: pointsForRound(roundNum) + FINAL_CHASE_CATCH_BONUS });
@@ -1020,7 +1143,7 @@
   }
 
   function epitaphRoomFor(roomLabel) {
-    if (roomLabel === "Final Chase") return "finalchase";
+    if (roomLabel.startsWith("Final Chase")) return "finalchase";
     const found = ROOMS.find(r => r.name === roomLabel);
     return found ? found.key : "cabin";
   }
@@ -1034,7 +1157,7 @@
 
   function fillEvidenceCard(card, entry, excludeEpitaph) {
     card.querySelector(".evidence-name").textContent = entry.name;
-    card.querySelector(".evidence-cause").textContent = entry.room === "Final Chase" ? "Cornered in the Final Chase" : `Expired in ${entry.room.startsWith("The ") ? entry.room : `the ${entry.room}`}`;
+    card.querySelector(".evidence-cause").textContent = entry.room.startsWith("Final Chase") ? "Cornered in the Final Chase" : `Expired in ${entry.room.startsWith("The ") ? entry.room : `the ${entry.room}`}`;
     const chosenEpitaph = randomEpitaph(entry.room, excludeEpitaph);
     card.querySelector(".evidence-epitaph").textContent = `"${chosenEpitaph}"`;
     card.style.display = ""; card.classList.remove("show"); void card.offsetWidth; card.classList.add("show");
@@ -1103,7 +1226,7 @@
       }
       [...elimLog].sort((a, b) => b.points - a.points).forEach(e => {
         const li = document.createElement("li");
-        if (e.room === "Final Chase" && !winner) li.classList.add("killer-row");
+        if (e.room.startsWith("Final Chase") && !winner) li.classList.add("killer-row");
         li.innerHTML = `<span>${e.name}</span><span>Expired - ${e.room} (+${e.points})</span>`; list.appendChild(li);
       });
       
@@ -1149,13 +1272,28 @@
   function onChatCommand(user, message, flags) {
     const text = (message || "").trim().toLowerCase();
     
-    if (text.startsWith("!vote ") && isPollActive) {
-      const targetArg = text.replace("!vote ", "").trim().toLowerCase();
-      if (pollCandidates[targetArg]) {
-        pollVotes[user] = pollCandidates[targetArg];
-        renderPoll();
+    // PASSWORD CHECK (Accepts with or without '!' prefix)
+    if (isDoorLocked && user.toLowerCase() === doorUnlocker && (text === doorPassword || text === "!" + doorPassword)) {
+      doorUnlocked = true;
+      return; 
+    }
+    
+    // POLL CHECK
+    if (isPollActive) {
+      if (isFinalChasePoll) {
+        if (text === "!live" || text === "!die") {
+          pollVotes[user] = text === "!live" ? "Live" : "Die";
+          renderPoll();
+        }
+        return;
+      } else if (text.startsWith("!vote ")) {
+        const targetArg = text.replace("!vote ", "").trim().toLowerCase();
+        if (pollCandidates[targetArg]) {
+          pollVotes[user] = pollCandidates[targetArg];
+          renderPoll();
+        }
+        return;
       }
-      return;
     }
 
     if (text === "!join") { if (!isPlaying || isLobbyOpen) handleJoin(user); return; }
@@ -1190,12 +1328,24 @@
     }
   }
   function devSendVote() {
-    if (activePlayers.length > 0) {
+    if (isPollActive && isFinalChasePoll) {
+      el("devMessage").value = Math.random() < 0.5 ? "!live" : "!die";
+      devSendChat();
+    } else if (activePlayers.length > 0) {
       const randomPlayer = activePlayers[Math.floor(Math.random() * activePlayers.length)];
       el("devMessage").value = `!vote ${randomPlayer}`;
       devSendChat();
     } else {
       devLog("Start a round first to test voting.");
+    }
+  }
+  function devUnlockDoor() {
+    if (isDoorLocked) {
+      el("devMessage").value = doorPassword;
+      el("devUsername").value = doorUnlocker; // Force the name to match the escaping player
+      devSendChat();
+    } else {
+      devLog("Door is not currently locked.");
     }
   }
   function devSendStats() { el("devMessage").value = "!stats"; devSendChat(); }
