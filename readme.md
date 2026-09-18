@@ -12,7 +12,8 @@ The last survivor faces the killer one-on-one in a Final Chase: a coin flip that
 
 * **No Backend Required:** Drops `server.py` entirely. Leaderboards run purely on browser `localStorage`.
 * **URL Configuration:** Simply append `?username=YourChannel` to the URL. No more editing JavaScript files.
-* **Audience Polling:** Chat predicts the action twice a round - `!vote [name]` guesses who dies next in a room with multiple survivors, and `!live`/`!die` guesses whether the last survivor makes it out alive during the Final Chase. Both feed the end-of-round "Crystal Ball" (most correct predictions) and "Loudest Voice" (most votes cast) awards.
+* **Audience Polling:** Chat predicts the action twice a round - `!vote [name]` guesses who dies next in a room with multiple survivors, and `!live`/`!die` guesses whether the last survivor makes it out alive during the Final Chase. Every vote feeds five end-of-round awards: **Crystal Ball** (most correct predictions), **Loudest Voice** (most votes cast), **Called It** (first person to correctly call the Final Chase), **Early Bird** (first person to vote at all that round), and **Fence Sitter** (flip-flopped their prediction the most).
+* **Cursed & Nostradamus:** Two rarer awards get their own dedicated evidence card at the end of the round, same corkboard treatment as the Case Files recap - **Cursed** (most wrong guesses of the round) and **Nostradamus** (voted at least 3 times and never once got it wrong). Neither shows up unless someone actually earns it.
 * **The Locked Door Minigame:** Winning the Final Chase coin flip isn't the end of it. Half the time, the survivor finds the exit door locked - a password appears on screen, and only *that* specific player has about 7 seconds to type it in chat before the killer catches up anyway.
 * **Custom Backgrounds:** Swaps plain CSS gradients for generated pixel-art backgrounds in 7 of the 12 rooms in rotation - Camp Cabin, The Cemetery, The Meat Locker, The Woods, The Gas Station, Abandoned Barn, and The Saw Mill. The rest (Abandoned Mine, Living Room, Basement, Attic, Boathouse) still use the original gradient look.
 
@@ -34,6 +35,7 @@ Because this version has no backend, it is perfect for hosting on **GitHub Pages
 
 - **Lobby:** 60-second countdown while players type `!join` (requires at least 2 players to start).
 - **Tonight's Killer:** A random slasher-parody persona (featuring a funny name and a one-line backstory) is introduced before the hunt begins.
+- **How to Play Along:** A one-time card, shown right after the killer intro on the first room of each round, explaining `!vote [name]` to chat before it's too late to matter.
 - **The Rooms:** Players hide across a rotating set of grimy, themed locations.
 - **Audience Polling:** Before the killer enters, the action pauses for 10 seconds. Chat uses `!vote [name]` to guess who is about to expire.
 - **The Hunt:** The killer catches 1-2 players per room (2 once a room starts with 7 or more players, otherwise 1); survivors sprint to the next location.
@@ -44,7 +46,11 @@ Because this version has no backend, it is perfect for hosting on **GitHub Pages
   ![The locked-door minigame during the Final Chase](screenshots/locked-door.png)
 
   Escaping the coin flip isn't a guaranteed survival, though - about half the time the exit door turns out to be locked. A password appears on screen and the survivor (only that specific player - chat can't type it for them) has roughly 7 seconds to type it before the killer catches up anyway.
-- **Case Files & Awards:** An evidence-board recap gives every caught player their own card with a dark-comedy epitaph. Finally, top audience voters and predictors are awarded.
+- **Case Files & Awards:** An evidence-board recap gives every caught player their own card with a dark-comedy epitaph. If anyone earned it, Cursed and/or Nostradamus get the same evidence-card treatment right after.
+
+  ![Cursed and Nostradamus audience award cards](screenshots/audience-awards.png)
+
+  Finally, the results screen lists every award: Crystal Ball, Loudest Voice, Called It, Early Bird, and Fence Sitter.
 
 ## 3. Chat Commands
 

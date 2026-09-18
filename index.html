@@ -62,7 +62,7 @@
 
   #hallOfFame, #statsCard,
   #panelLobby > h1, #lobbyTimer, #lobbyJoinHint, #lobbyList, #captionTape, #captionTapeBottom,
-  #huntHeader, #huntRecap, #killerIntro, #evidenceScene, #finalRecapView, #allTimeView,
+  #huntHeader, #huntRecap, #killerIntro, #voteExplainer, #evidenceScene, #finalRecapView, #allTimeView,
   #splashLogo, #splashCta, #pollOverlay {
     position: relative;
     z-index: 3;
@@ -331,6 +331,14 @@
   #killerIntroName { font-size: 24px; line-height: 1.4; -webkit-text-stroke: 1.5px #000; text-shadow: 3px 3px 0 rgba(0,0,0,0.6); background: linear-gradient(180deg, #ff8080 0%, #ff1a1a 45%, #8a0000 100%); -webkit-background-clip: text; background-clip: text; color: transparent; animation: logoShake 2.4s ease-in-out infinite; margin-bottom: 18px; }
   #killerIntroBackstory { font-size: var(--fs-sm); color: #d8c8c8; font-style: italic; line-height: 1.8; max-width: 460px; }
 
+  /* --- Shown once per round, right after the killer intro card and before the first room begins --- */
+  #voteExplainer { display: none; width: 100%; height: 340px; margin-top: 8px; border: 3px solid #000; border-radius: 4px; background: radial-gradient(circle at 50% 30%, #1a1505 0%, #050301 75%); box-sizing: border-box; padding: 20px; text-align: center; overflow: hidden; }
+  #voteExplainer.show { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #voteExplainerLabel { font-size: var(--fs-sm); color: #ffd0d0; letter-spacing: 3px; margin-bottom: 10px; opacity: 0.85; }
+  #voteExplainerTitle { font-size: var(--fs-lg); color: #fff; margin-bottom: 18px; text-shadow: 2px 2px 0 #000; }
+  #voteExplainerTitle .highlight { color: #ffcc00; text-shadow: 1px 1px 0 #000; }
+  #voteExplainerBody { font-size: var(--fs-sm); color: #d8c8c8; line-height: 1.8; max-width: 460px; }
+
   #huntRecap { display: none; width: 100%; height: 340px; margin-top: 8px; border: 3px solid #000; border-radius: 4px; background: #0e0505; box-sizing: border-box; padding: 10px; overflow-y: auto; }
   #huntRecap.show { display: block; }
   #huntRecapTitle { text-align: center; margin-bottom: 6px; }
@@ -522,6 +530,12 @@
         <div id="killerIntroName">Name</div>
         <div id="killerIntroBackstory">Backstory</div>
       </div>
+      <!-- Shown once per round, right after the killer intro card and before the first room begins. -->
+      <div id="voteExplainer">
+        <div id="voteExplainerLabel">AUDIENCE PARTICIPATION</div>
+        <div id="voteExplainerTitle">Type <span class="highlight">!vote [name]</span></div>
+        <div id="voteExplainerBody">Before the killer strikes in each room, chat gets 10 seconds to guess who's about to expire. Guess right for a shot at Crystal Ball, Cursed, and Nostradamus when the round ends.</div>
+      </div>
       <div id="huntRecap">
         <h2 id="huntRecapTitle">ROOM COMPLETE</h2>
         <div id="huntRecapColumns">
@@ -538,7 +552,7 @@
     </div>
 
     <div id="panelMemoriam" class="panel">
-      <h1>CASE FILES</h1>
+      <h1 id="memoriamHeading">CASE FILES</h1>
       <div id="evidenceScene">
         <div class="evidence-card" id="evidenceCard1">
           <div class="evidence-stamp">EXPIRED</div>
@@ -599,7 +613,8 @@
   const CHANNEL_NAME  = urlParams.get("username") || "PaladinArcade";
   const LOBBY_SECONDS = 60;
   const MIN_PLAYERS   = 2; 
-  const POLL_SECONDS  = 10; 
+  const POLL_SECONDS  = 10;
+  const NOSTRADAMUS_MIN_VOTES = 3; // min votes cast (all correct) to qualify for the Nostradamus award
 
   const ROOMS = [
     { name: "Camp Cabin",      key: "cabin" },
@@ -629,7 +644,8 @@
   const SLASH_HOLD_MS        = 1400; 
   const FLEE_MS              = 1200; 
   const ROOM_RECAP_MS        = 3500; 
-  const KILLER_INTRO_MS      = 6500; 
+  const KILLER_INTRO_MS      = 6500;
+  const VOTE_EXPLAINER_MS    = 5500; // "How to !vote" card, shown once per round right after the killer intro
   const FINAL_CHASE_INTRO_MS = 2200; 
   const FINAL_CHASE_RUN_MS   = 1800; 
   const WINNER_BANNER_HOLD_MS = 5200;
@@ -697,7 +713,7 @@
     woods: [ "Wandered off to find a signal bar. Found a killer instead.", "Should have stayed on the marked trail.", "Tripped over a root running from a bad decision.", "Thought the full moon was just for ambiance.", "Got spooked by an owl, then by something worse.", "Went to pee in the bushes. Famous last words: \"I'll be right back.\"" ],
     cemetery: [ "Dug their own grave. Literally.", "Should have stayed out of the mausoleum.", "Tripped over a tombstone.", "Thought the statues were just decorations.", "Got caught dead in the graveyard." ],
     meatlocker: [ "Thought it was just a side of beef. It wasn't.", "Slipped on the frost. Caught the hook.", "Tried to blend in with the cold cuts.", "Should have brought a heavier jacket.", "The door locks from the outside. Classic design flaw." ],
-    gasstation: [ "Tried to buy a hot dog. It was a trap.", "Couldn't solve the bathroom key puzzle.", "Pumped premium, got regular... and a machete.", "Ignored the 'No Smoking' sign. Boom.", "The jerky wasn't beef." ],
+    gasstation: [ "Tried to buy a hot dog. It was a trap.", "Couldn't solve the bathroom key puzzle.", "Pumped premium, got regular... and a machete.", "Ignored the 'No Smoking' sign. Boom.", "The jerky wasn't beef.", "Should have quit smoking sooner.", "They're smoking... literally." ],
     barn: [ "Found a needle in the haystack. And a pitchfork.", "The tractor started on its own.", "Hid in the silo. Silos are for grain, not people.", "Should have let sleeping dogs lie.", "Stepped on a rusty nail. Tetanus didn't get them first." ],
     sawmill: [ "Ignored the 'Keep Hands Clear' sign.", "Went against the grain.", "The conveyor belt only goes one way.", "Didn't wear safety goggles.", "Split happens." ],
     finalchase: [ "So close to the exit. So very close.", "The car wouldn't start. It's never gonna start.", "Looked back. You should never look back.", "Ran upstairs instead of outside. Classic.", "Made it to the door. The door was locked." ]
@@ -722,6 +738,9 @@
   let pollCandidates = {}; 
   let roundVoters = {}; // { username: totalVotesCast }
   let roundCorrect = {}; // { username: correctVotesCast }
+  let earlyBirdName = null;   // first person to cast ANY vote this round (any poll)
+  let voteChanges = {};       // { username: timesTheyChangedAnExistingVoteToSomethingElse }
+  let calledItName = null;    // first person (by vote order) to correctly call !live/!die
 
   // DOOR MINIGAME STATE
   let isDoorLocked = false;
@@ -843,6 +862,17 @@
   }
 
   /* ================= POLL LOGIC ================= */
+  // Shared by both poll types (room !vote and Final Chase !live/!die) so
+  // Early Bird and Fence Sitter track across the WHOLE round, not just
+  // whichever poll happens to be active - a vote in either counts.
+  function registerVote(user, value) {
+    if (!earlyBirdName) earlyBirdName = user;
+    if (pollVotes[user] && pollVotes[user] !== value) {
+      voteChanges[user] = (voteChanges[user] || 0) + 1;
+    }
+    pollVotes[user] = value;
+  }
+
   function renderPoll() {
     const counts = {};
     Object.values(pollVotes).forEach(name => { counts[name] = (counts[name] || 0) + 1; });
@@ -984,6 +1014,16 @@
     el("killerIntro").classList.remove("show"); el("huntFloor").style.display = "";
   }
 
+  // Shown once per round, right after the killer intro and before the first
+  // room begins - a quick explainer so new viewers know they can influence
+  // the game with !vote before it's too late to matter.
+  async function showVoteExplainer() {
+    el("roomTitle").textContent = "HOW TO PLAY ALONG"; el("turnInfo").textContent = " ";
+    el("huntFloor").style.display = "none"; el("voteExplainer").classList.add("show");
+    await sleep(VOTE_EXPLAINER_MS);
+    el("voteExplainer").classList.remove("show"); el("huntFloor").style.display = "";
+  }
+
   function fleeSurvivors(survivors) {
     survivors.forEach(name => {
       const sprite = campersByName[name].el;
@@ -1069,10 +1109,14 @@
     const catchLeft = escapes ? exitLeft : 55;
 
     // Check Votes for Final Chase
+    // Object.entries() preserves insertion order for string keys, so the
+    // first correct guess encountered here really is the first person (by
+    // vote order) who called it right - that's who "Called It" goes to.
     Object.entries(pollVotes).forEach(([voter, target]) => {
       roundVoters[voter] = (roundVoters[voter] || 0) + 1;
       if ((escapes && target === "Live") || (!escapes && target === "Die")) {
         roundCorrect[voter] = (roundCorrect[voter] || 0) + 1;
+        if (!calledItName) calledItName = voter;
       }
     });
 
@@ -1156,6 +1200,12 @@
   }
 
   function fillEvidenceCard(card, entry, excludeEpitaph) {
+    // Explicitly reset stamp/rip every time, not just on the award-card path -
+    // showAwardCards() below repurposes these same two fields ("CURSED"/
+    // "AUDIENCE AWARD"), so a plain elimination card has to re-assert its own
+    // defaults rather than trusting whatever the card last displayed.
+    card.querySelector(".evidence-stamp").textContent = "EXPIRED";
+    card.querySelector(".evidence-rip").textContent = "MISSING PERSON";
     card.querySelector(".evidence-name").textContent = entry.name;
     card.querySelector(".evidence-cause").textContent = entry.room.startsWith("Final Chase") ? "Cornered in the Final Chase" : `Expired in ${entry.room.startsWith("The ") ? entry.room : `the ${entry.room}`}`;
     const chosenEpitaph = randomEpitaph(entry.room, excludeEpitaph);
@@ -1167,6 +1217,7 @@
   async function showMemoriam(elimLog) {
     if (elimLog.length === 0) return;
     setState("MEMORIAM");
+    el("memoriamHeading").textContent = "CASE FILES";
     const card1 = el("evidenceCard1"), card2 = el("evidenceCard2");
     for (let i = 0; i < elimLog.length; i += 2) {
       const ep1 = fillEvidenceCard(card1, elimLog[i], null);
@@ -1176,12 +1227,68 @@
     }
   }
 
+  // Cursed and Nostradamus get the same corkboard evidence-card treatment
+  // as the eliminated players, instead of just another line on the results
+  // list - they're rare enough (need real wrong/right streaks) to deserve
+  // their own spotlight moment.
+  function computeCursed() {
+    return Object.entries(roundVoters)
+      .map(([name, votes]) => ({ name, votes, correct: roundCorrect[name] || 0, wrong: votes - (roundCorrect[name] || 0) }))
+      .filter(e => e.wrong > 0)
+      .sort((a, b) => b.wrong - a.wrong || b.votes - a.votes)[0] || null;
+  }
+
+  function computeNostradamus() {
+    return Object.entries(roundVoters)
+      .map(([name, votes]) => ({ name, votes, correct: roundCorrect[name] || 0 }))
+      .filter(e => e.votes >= NOSTRADAMUS_MIN_VOTES && e.correct === e.votes)
+      .sort((a, b) => b.votes - a.votes)[0] || null;
+  }
+
+  function fillAwardCard(card, award) {
+    card.querySelector(".evidence-stamp").textContent = award.stamp;
+    card.querySelector(".evidence-rip").textContent = "AUDIENCE AWARD";
+    card.querySelector(".evidence-name").textContent = award.name;
+    card.querySelector(".evidence-cause").textContent = award.cause;
+    card.querySelector(".evidence-epitaph").textContent = `"${award.epitaph}"`;
+    card.style.display = ""; card.classList.remove("show"); void card.offsetWidth; card.classList.add("show");
+  }
+
+  async function showAwardCards(cursedEntry, nostradamusEntry) {
+    const awards = [];
+    if (cursedEntry) {
+      awards.push({
+        stamp: "CURSED", name: cursedEntry.name,
+        cause: `CURSED - ${cursedEntry.wrong} wrong guess${cursedEntry.wrong === 1 ? "" : "es"}`,
+        epitaph: "Voted early, voted often, and was wrong almost every time. Deeply, hilariously cursed."
+      });
+    }
+    if (nostradamusEntry) {
+      awards.push({
+        stamp: "PSYCHIC", name: nostradamusEntry.name,
+        cause: `NOSTRADAMUS - ${nostradamusEntry.correct}/${nostradamusEntry.votes} correct`,
+        epitaph: "Never missed a single call all night. The audience's own oracle."
+      });
+    }
+    if (awards.length === 0) return;
+
+    setState("MEMORIAM");
+    el("memoriamHeading").textContent = "AUDIENCE AWARDS";
+    const card1 = el("evidenceCard1"), card2 = el("evidenceCard2");
+    fillAwardCard(card1, awards[0]);
+    if (awards[1]) fillAwardCard(card2, awards[1]);
+    else { card2.classList.remove("show"); card2.style.display = "none"; }
+    await sleep(MEMORIAM_HOLD_MS);
+  }
+
   async function playRound() {
     setState("HUNT"); activePlayers = [...queue]; queue = []; eliminationLog = [];
     roundVoters = {}; roundCorrect = {};
+    earlyBirdName = null; voteChanges = {}; calledItName = null;
     if (activePlayers.length < MIN_PLAYERS) { showFinalResults(null, [], activePlayers[0] || null); return; }
     
     await showKillerIntro();
+    await showVoteExplainer();
     let roundNum = 0;
     while (activePlayers.length > 1) {
       roundNum++;
@@ -1194,8 +1301,13 @@
     
     await sleep(WINNER_BANNER_HOLD_MS);
     await showMemoriam(eliminationLog);
+    await showAwardCards(computeCursed(), computeNostradamus());
 
-    // The audience reward joke
+    // The audience reward joke - #eventBanner lives inside #panelHunt, so it
+    // was silently invisible here (pre-existing, not caused by the awards
+    // work above - state was already left on MEMORIAM from showMemoriam()
+    // with nothing to switch it back before this call).
+    setState("HUNT");
     showBanner("CONGRATS ON YOUR ACHIEVEMENTS. YOUR PRIZE IS NOTHING.", "fail");
     await sleep(3500);
 
@@ -1233,12 +1345,13 @@
       // Calculate & Display Awards
       let bestOracle = Object.entries(roundCorrect).sort((a,b) => b[1] - a[1])[0];
       let mostActive = Object.entries(roundVoters).sort((a,b) => b[1] - a[1])[0];
-      
+      let fenceSitter = Object.entries(voteChanges).sort((a,b) => b[1] - a[1])[0];
+
       if (bestOracle || mostActive) {
         const divider = document.createElement("li");
         divider.innerHTML = `<span style="color:#6b0000">--------------------</span><span style="color:#6b0000">------</span>`;
         list.appendChild(divider);
-        
+
         if (bestOracle && bestOracle[1] > 0) {
           const li = document.createElement("li");
           li.innerHTML = `<span style="color:#ffcc00">Crystal Ball: ${bestOracle[0]}</span><span style="color:#ffcc00">${bestOracle[1]} correct</span>`;
@@ -1248,6 +1361,21 @@
           const li2 = document.createElement("li");
           li2.innerHTML = `<span style="color:#ffcc00">Loudest Voice: ${mostActive[0]}</span><span style="color:#ffcc00">${mostActive[1]} votes</span>`;
           list.appendChild(li2);
+        }
+        if (calledItName) {
+          const li3 = document.createElement("li");
+          li3.innerHTML = `<span style="color:#ffcc00">Called It: ${calledItName}</span><span style="color:#ffcc00">nailed the Final Chase</span>`;
+          list.appendChild(li3);
+        }
+        if (earlyBirdName) {
+          const li4 = document.createElement("li");
+          li4.innerHTML = `<span style="color:#ffcc00">Early Bird: ${earlyBirdName}</span><span style="color:#ffcc00">first vote in</span>`;
+          list.appendChild(li4);
+        }
+        if (fenceSitter && fenceSitter[1] > 0) {
+          const li5 = document.createElement("li");
+          li5.innerHTML = `<span style="color:#ffcc00">Fence Sitter: ${fenceSitter[0]}</span><span style="color:#ffcc00">changed ${fenceSitter[1]}x</span>`;
+          list.appendChild(li5);
         }
       }
     }
@@ -1282,14 +1410,14 @@
     if (isPollActive) {
       if (isFinalChasePoll) {
         if (text === "!live" || text === "!die") {
-          pollVotes[user] = text === "!live" ? "Live" : "Die";
+          registerVote(user, text === "!live" ? "Live" : "Die");
           renderPoll();
         }
         return;
       } else if (text.startsWith("!vote ")) {
         const targetArg = text.replace("!vote ", "").trim().toLowerCase();
         if (pollCandidates[targetArg]) {
-          pollVotes[user] = pollCandidates[targetArg];
+          registerVote(user, pollCandidates[targetArg]);
           renderPoll();
         }
         return;
@@ -1304,7 +1432,12 @@
   function connectTwitch() {
     console.log(`Slash Royale: connecting to Twitch chat channel "${CHANNEL_NAME}"...`);
     ComfyJS.onChat = (user, message, flags) => onChatCommand(user, message, flags);
-    ComfyJS.onCommand = (user, command, message, flags) => onChatCommand(user, `!${command}`, flags);
+    // Reconstruct the FULL text, not just "!command" - ComfyJS splits
+    // "!vote Alice" into command="vote", message="Alice" as separate params,
+    // so dropping `message` here silently ate every !vote's target name in
+    // real chat (argument-less commands like !join/!live/!die were never
+    // affected, which is why this went unnoticed until !vote was added).
+    ComfyJS.onCommand = (user, command, message, flags) => onChatCommand(user, `!${command}${message ? " " + message : ""}`, flags);
     ComfyJS.Init(CHANNEL_NAME);
   }
 
